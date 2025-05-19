@@ -1,0 +1,3 @@
+[submodule "external/BALROG"]
+	path = external/BALROG
+	url = https://github.com/balrog-ai/BALROG.git
