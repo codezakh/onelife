@@ -7,3 +7,4 @@ ipdb
 gymnasium
 hatch
 setuptools
+-e external/BALROG
