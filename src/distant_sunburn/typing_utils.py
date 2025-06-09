@@ -14,8 +14,10 @@ def make_option() -> Option[int, str]:
 ```
 """
 
-from typing import Generic, TypeVar, NoReturn, Callable, TypeGuard, Any
+from typing import Generic, TypeVar, NoReturn, Callable, TypeGuard, Any, Type
+import functools
 from pydantic import BaseModel
+
 
 BaseModelT = TypeVar("BaseModelT", bound=BaseModel)
 
@@ -144,3 +146,38 @@ class Error(Err[Any, E]):
 
     def __init__(self, error: E) -> None:
         super().__init__(error)
+
+
+P = TypeVar("P")
+Q = TypeVar("Q")
+
+
+def implements(protocol: Type[P]) -> Callable[[Type[P]], Type[P]]:
+    """
+    A decorator that ensures that a class implements a protocol.
+
+    Usage:
+    ```python
+    from typing import Protocol
+    class CatProtocol(Protocol):
+        def meow(self) -> str:
+            ...
+
+    @implements(CatProtocol)
+    class Cat:
+        def meow(self) -> str:
+            return "meow"
+
+    implements(CatProtocol)(Cat)
+    """
+
+    def decorator(cls: Type[P]) -> Type[P]:
+        # The type checker will enforce that `cls` matches the `protocol` without casting.
+        @functools.wraps(cls)
+        def wrapper(*args, **kwargs):
+            return cls(*args, **kwargs)
+
+        # Returning the original class, which must be type-compatible with the protocol
+        return cls
+
+    return decorator

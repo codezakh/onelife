@@ -1,4 +1,6 @@
 import json
+from typing import IO, Any
+from typing_extensions import Self
 import time
 from pathlib import Path
 from queue import Empty, Queue
@@ -56,19 +58,56 @@ class JsonlIoHandler(collections.abc.Iterable[dict]):
 
 
 class PydanticJSONLinesWriter(Generic[BaseModelT]):
-    def __init__(self, file_path: str | Path):
-        self.file_path = file_path
+    """
+    Write Pydantic model instances to a JSONL file.
 
-    def __call__(self, serializable: BaseModelT, mode: str = "a") -> None:
-        with open(self.file_path, mode) as f:
-            f.write(serializable.model_dump_json() + "\n")
+    This class can be used as a context manager to ensure that the file is closed
+    after the writer is done. This is useful when doing a lot of writes in a tight loop
+    and you want to avoid opening and closing the file multiple times.
+
+    Usage:
+    ```python
+    writer = PydanticJSONLinesWriter("file.jsonl")
+    writer(model_instance)
+    writer.write_batch([model_instance1, model_instance2])
+    with writer:
+        for n in range(1000):
+            model_instance = get_model_instance()
+            writer(model_instance)
+    ```
+    """
+
+    def __init__(self, file_path: str | Path, mode: str = "a"):
+        self.file_path = file_path
+        self._file: Optional[IO[Any]] = None
+        self._mode = mode
+
+    def __enter__(self) -> Self:
+        self._file = open(self.file_path, mode=self._mode)
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        if self._file:
+            self._file.close()
+            self._file = None
+
+    def __call__(self, serializable: BaseModelT) -> None:
+        if self._file is None:
+            with open(self.file_path, "a") as f:
+                f.write(serializable.model_dump_json() + "\n")
+        else:
+            self._file.write(serializable.model_dump_json() + "\n")
 
     def write_batch(
         self, serializables: Collection[BaseModelT], mode: str = "a"
     ) -> None:
-        with open(self.file_path, mode) as f:
+        if self._file is None:
+            with open(self.file_path, mode) as f:
+                for serializable in serializables:
+                    f.write(serializable.model_dump_json() + "\n")
+        else:
             for serializable in serializables:
-                f.write(serializable.model_dump_json() + "\n")
+                self._file.write(serializable.model_dump_json() + "\n")
 
 
 class PydanticJSONLinesReader(collections.abc.Iterable[BaseModelT]):
