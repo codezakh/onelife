@@ -2,7 +2,7 @@
 Symbolic observation wrapper and object model for Crafter RL environment.
 """
 
-from typing import Dict, List, Optional, Tuple, Union, Literal, Annotated, cast
+from typing import Dict, List, Optional, Tuple, Union, Literal, Annotated, cast, Any
 from enum import Enum
 import numpy as np
 from pydantic import BaseModel, Field
@@ -206,7 +206,6 @@ class SymbolicObservation(BaseModel):
 
     # Environment info
     daylight: float = Field(ge=0.0, le=1.0)
-    step_count: int
 
     # Status flags
     dead: bool = False
@@ -220,54 +219,24 @@ class SymbolicObservation(BaseModel):
     ] = Field(default_factory=list)
 
 
-# Wrapper implementation
-class CrafterSymbolicWrapper(gym.Wrapper):
-    """Symbolic observation wrapper for Crafter environment."""
+class CrafterSymbolic:
+    """Core class for converting Crafter state to symbolic observations."""
 
-    def __init__(self, env: gym.Env, config: ObservationConfig):
-        super().__init__(env)
+    def __init__(self, config: ObservationConfig):
         self.config = config
         self.env_params = EnvironmentParameters()
 
-        # Override action space to use symbolic actions
-        self.action_space = spaces.Discrete(len(Action))
-
-        # Track internal state
-        self._step_count = 0
-
-        assert isinstance(self.env, CrafterEnv)
-
-    def reset(self):
-        """Reset environment and return symbolic observation."""
-        # Shape is (64, 64, 3)
-        obs = cast(npt.NDArray[np.uint8], self.env.reset())
-        self._step_count = 0
-        return self._create_symbolic_observation(obs)
-
-    def step(self, action: Union[int, Action]):
-        """Execute action and return symbolic observation."""
-        # Convert symbolic action to env action
-        if isinstance(action, Action):
-            action_idx = list(Action).index(action)
-        else:
-            action_idx = action
-
-        obs, reward, done, info = self.env.step(action_idx)
-        self._step_count += 1
-
-        symbolic_obs = self._create_symbolic_observation(obs, info)
-        return symbolic_obs, reward, done, info
-
-    def _create_symbolic_observation(
-        self, raw_obs: np.ndarray, info: Optional[Dict] = None
+    def get_symbolic_observation(
+        self,
+        env: CrafterEnv,
     ) -> SymbolicObservation:
         """Convert raw observation to symbolic format."""
-        assert isinstance(self.env, CrafterEnv)
-        assert self.env._player is not None
+        assert isinstance(env, CrafterEnv)
+        assert env._player is not None
 
         # Access internal game state
-        player_obj = self.env._player
-        world = self.env._world
+        player_obj = env._player
+        world = env._world
 
         # Get player location and facing
         player_loc = Location(x=player_obj.pos[0], y=player_obj.pos[1])
@@ -292,7 +261,7 @@ class CrafterSymbolicWrapper(gym.Wrapper):
             entities = self._get_all_entities(world, player_loc)
             materials = self._get_all_materials(world, player_loc)
         else:
-            view_dist = self.config.view_distance or max(self.env._view) // 2
+            view_dist = self.config.view_distance or max(env._view) // 2
             entities = self._get_visible_entities(world, player_loc, view_dist)
             materials = self._get_visible_materials(world, player_loc, view_dist)
 
@@ -304,7 +273,6 @@ class CrafterSymbolicWrapper(gym.Wrapper):
             entities=entities,
             materials=materials,
             daylight=world.daylight,
-            step_count=self._step_count,
             dead=player_obj.health <= 0,
         )
 
@@ -437,6 +405,41 @@ class CrafterSymbolicWrapper(gym.Wrapper):
                     materials.append(Material(type=material, location=loc))
 
         return materials
+
+
+class CrafterSymbolicWrapper(gym.Wrapper):
+    """Symbolic observation wrapper for Crafter environment."""
+
+    def __init__(self, env: gym.Env, config: ObservationConfig):
+        super().__init__(env)
+        self.config = config
+        self._symbolic = CrafterSymbolic(config)
+
+        # Override action space to use symbolic actions
+        self.action_space = spaces.Discrete(len(Action))
+
+        assert isinstance(self.env, CrafterEnv)
+
+    def reset(self):
+        """Reset environment and return symbolic observation."""
+        # Shape is (64, 64, 3)
+        obs = cast(npt.NDArray[np.uint8], self.env.reset())
+        return self._symbolic.get_symbolic_observation(cast(CrafterEnv, self.env))
+
+    def step(self, action: Union[int, Action]):
+        """Execute action and return symbolic observation."""
+        # Convert symbolic action to env action
+        if isinstance(action, Action):
+            action_idx = list(Action).index(action)
+        else:
+            action_idx = action
+
+        obs, reward, done, info = self.env.step(action_idx)
+
+        symbolic_obs = self._symbolic.get_symbolic_observation(
+            cast(CrafterEnv, self.env)
+        )
+        return symbolic_obs, reward, done, info
 
     def render(self, mode="human"):
         """Render the environment."""
