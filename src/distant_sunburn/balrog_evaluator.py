@@ -1,13 +1,3 @@
-from typing import Protocol
-from typing_extensions import Self
-from pathlib import Path
-from typing import Any
-from typing import Optional
-
-from pydantic import BaseModel
-
-from distant_sunburn.io_utils import PydanticJSONLinesWriter
-import csv
 import json
 import logging
 import multiprocessing
@@ -16,17 +6,18 @@ import random
 import traceback
 from collections import defaultdict
 from pathlib import Path
+from typing import Any, Optional, Protocol
 
 import numpy as np
-from omegaconf import OmegaConf, DictConfig
-from tqdm import tqdm
-
-from balrog.agents.few_shot import FewShotAgent
-from balrog.dataset import InContextDataset
-from balrog.environments import make_env
 from balrog.utils import get_unique_seed
+from distant_sunburn.io_utils import PydanticJSONLinesWriter
 from distant_sunburn.typing_utils import implements
-from balrog.agents import AgentFactory
+from pydantic import BaseModel
+from tqdm import tqdm
+from typing_extensions import Self
+
+from .balrog_components import CrafterEnvironmentConfig, environment_factory
+from .balrog_interfaces import AgentProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -274,36 +265,31 @@ class EvaluatorManager:
                 )
 
 
+class EvaluatorConfig(BaseModel):
+    num_episodes: int
+    max_steps_per_episode: Optional[int] = None
+    environment_config: CrafterEnvironmentConfig
+    output_dir: Path
+    feedback_on_invalid_action: bool = True
+    save_images: bool = False
+    num_workers: int = 1
+
+
 class Evaluator:
-    """Evaluator for a single environment and task.
 
-    The Evaluator handles the execution of evaluation episodes for a specific environment and task,
-    including loading in-context learning episodes and running episodes with the agent.
-    """
-
-    def __init__(self, env_name, config, balrog_root: Path = Path("."), output_dir="."):
-        """Initialize the Evaluator.
-
-        Args:
-            env_name (str): Name of the environment to evaluate.
-            config (omegaconf.DictConfig): Configuration object containing evaluation settings.
-            original_cwd (str, optional): Original current working directory. Defaults to "".
-            output_dir (str, optional): Directory to save evaluation outputs. Defaults to ".".
-        """
-        self.env_name = env_name.strip()
+    def __init__(
+        self,
+        config: EvaluatorConfig,
+    ):
         self.config = config
-        self.output_dir = output_dir
-        self.tasks = config.tasks[f"{self.env_name}_tasks"]
 
-        self.num_episodes = config.eval.num_episodes[self.env_name]
-        self.num_workers = config.eval.num_workers
-        self.max_steps_per_episode = config.eval.max_steps_per_episode
-
-        self.dataset = InContextDataset(
-            self.config, self.env_name, original_cwd=balrog_root
-        )
-
-    def run_episode(self, task, agent, process_num=None, position=0, episode_idx=0):
+    def run_episode(
+        self,
+        agent: AgentProtocol,
+        process_num=None,
+        position=0,
+        episode_idx=0,
+    ):
         """Run a single evaluation episode.
 
         Args:
@@ -316,25 +302,23 @@ class Evaluator:
         Returns:
             dict: Log of the episode containing statistics and results.
         """
-        env = make_env(self.env_name, task, self.config)
+        env = environment_factory(self.config.environment_config)
         agent.reset()
 
-        seed = self.config.envs.env_kwargs.seed
+        seed = self.config.environment_config.seed
         if seed is None:
             seed = get_unique_seed(process_num=process_num, episode_idx=episode_idx)
         random.seed(seed)
         np.random.seed(seed)
         obs, info = env.reset(seed=seed)
         episode_log = {
-            "task": task,
+            "task": self.config.environment_config.task,
             "action_frequency": defaultdict(int),
             "input_tokens": 0,
             "output_tokens": 0,
         }
 
         instructions = None
-        if self.env_name == "babyai":
-            instructions = obs["mission"]
         agent.prompt_builder.update_instruction_prompt(
             env.get_instruction_prompt(instructions=instructions)
         )
@@ -342,14 +326,16 @@ class Evaluator:
         episode_return = 0.0
 
         max_steps_per_episode = (
-            env.max_steps
-            if self.max_steps_per_episode is None
-            else self.max_steps_per_episode
+            self.config.environment_config.max_episode_steps
+            if self.config.max_steps_per_episode is None
+            else self.config.max_steps_per_episode
         )
 
-        # Create a unique CSV filename for this episode
         trajectory_log_filename = os.path.join(
-            self.output_dir, self.env_name, task, f"{task}_run_{episode_idx:02d}.csv"
+            self.config.output_dir,
+            self.config.environment_config.name,
+            self.config.environment_config.task,
+            f"{self.config.environment_config.task}_run_{episode_idx:02d}.csv",
         )
         Path(trajectory_log_filename).parent.mkdir(exist_ok=True, parents=True)
 
@@ -357,19 +343,9 @@ class Evaluator:
             trajectory_log_filename
         ) as trajectory_step_writer:
 
-            # If the agent is an FewShotAgent, load the in-context learning episode
-            if isinstance(agent, FewShotAgent):
-                self.dataset.load_in_context_learning_episodes(
-                    self.config.eval.icl_episodes, task, agent
-                )
-
-                if (
-                    self.config.agent.cache_icl
-                    and self.config.client.client_name == "gemini"
-                ):
-                    agent.cache_icl()
-
-            pbar_desc = f"Task: {task}, Proc: {process_num}"
+            pbar_desc = (
+                f"Task: {self.config.environment_config.task}, Proc: {process_num}"
+            )
             pbar = tqdm(
                 total=max_steps_per_episode,
                 desc=pbar_desc,
@@ -380,36 +356,38 @@ class Evaluator:
 
             action = None
             for step in range(max_steps_per_episode):
+                # Agent has an act method that returns an LLMResponse
                 response = agent.act(obs, prev_action=action)
                 action = env.check_action_validity(response.completion)
-                reasoning = response.reasoning if hasattr(response, "reasoning") else ""
+                reasoning = response.reasoning if response.reasoning else ""
 
                 episode_log["action_frequency"][action] += 1
                 episode_log["input_tokens"] += response.input_tokens
                 episode_log["output_tokens"] += response.output_tokens
 
-                obs, reward, terminated, truncated, info = env.step(action)
-                done = terminated or truncated
+                experience = env.step(action)
+                obs = experience.obs
+                reward = experience.reward
+                done = experience.done
 
                 episode_return += reward  # type: ignore
 
                 # Give feedback on the action (if not valid)
-                obs["text"]["long_term_context"] = (
+                obs.text.long_term_context = (
                     f"\n\nYour previous output did not contain a valid action. Defaulted to action: {action}\n\nObservation:\n"
-                    + obs["text"]["long_term_context"]
+                    + obs.text.long_term_context
                     if (action != response.completion)
-                    and (self.config.eval.feedback_on_invalid_action)
-                    else obs["text"]["long_term_context"]
+                    and (self.config.feedback_on_invalid_action)
+                    else obs.text.long_term_context
                 )
                 action = response.completion
-                # Write the step data to the CSV file
 
                 trajectory_step = TrajectoryStep(
                     step=step,
                     action=action,
                     reasoning=reasoning,
-                    observation=obs["text"]["long_term_context"]
-                    + obs["text"]["short_term_context"],
+                    observation=obs.text.long_term_context
+                    + obs.text.short_term_context,
                     reward=float(reward),
                     done=done,
                 )
@@ -417,16 +395,16 @@ class Evaluator:
 
                 pbar.update(1)
 
-                if self.config.eval.save_images and obs["image"]:
+                if self.config.save_images and obs.image:
                     images_dir = os.path.join(
-                        self.output_dir,
-                        self.env_name,
-                        task,
+                        self.config.output_dir,
+                        self.config.environment_config.name,
+                        self.config.environment_config.task,
                         f"episode_{episode_idx:02d}",
                     )
                     Path(images_dir).mkdir(exist_ok=True, parents=True)
                     image_filename = os.path.join(images_dir, f"step_{step:04d}.png")
-                    image = obs["image"]
+                    image = obs.image
                     image.save(image_filename)
 
                 if done:
@@ -449,19 +427,19 @@ class Evaluator:
             episode_log.update(env.get_stats())
             episode_log["process_num"] = process_num
             episode_log["seed"] = seed
-            episode_log["agent"] = OmegaConf.to_container(
-                self.config.agent, resolve=True
-            )
-            episode_log["client"] = OmegaConf.to_container(
-                self.config.client, resolve=True
-            )
+            # episode_log["agent"] = OmegaConf.to_container(
+            #     self.config.agent, resolve=True
+            # )
+            # episode_log["client"] = OmegaConf.to_container(
+            #     self.config.client, resolve=True
+            # )
 
-            # Save the episode_log to a JSON file
+            # # Save the episode_log to a JSON file
             json_filename = os.path.join(
-                self.output_dir,
-                self.env_name,
-                task,
-                f"{task}_run_{episode_idx:02d}.json",
+                self.config.output_dir,
+                self.config.environment_config.name,
+                self.config.environment_config.task,
+                f"{self.config.environment_config.task}_run_{episode_idx:02d}.json",
             )
             Path(json_filename).parent.mkdir(exist_ok=True, parents=True)
             with open(json_filename, "w") as f:
