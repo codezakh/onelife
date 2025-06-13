@@ -9,7 +9,7 @@ from .balrog_interfaces import (
 import re
 import copy
 from balrog.client import LLMResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing_extensions import Self
 from balrog.environments.env_wrapper import EnvWrapper
 from balrog.environments import make_env
@@ -307,28 +307,31 @@ class EnvironmentConfig(BaseModel):
     name: str
     task: str
 
+    def to_balrog_format(self) -> DictConfig:
+        # Balrog requires the config to be in the format:
+        # config.envs.{name_of_env}_kwargs
+        return DictConfig(
+            {
+                "envs": {
+                    f"{self.name}_kwargs": self.model_dump(exclude={"name", "task"}),
+                }
+            }
+        )
+
+    def create_balrog_env(self) -> EnvWrapper:
+        return make_env(self.name, self.task, self.to_balrog_format())
+
 
 class CrafterEnvironmentConfig(EnvironmentConfig):
     area: tuple[int, int]
     view: tuple[int, int]
     size: tuple[int, int]
     reward: bool
-    seed: Optional[int]
-    max_episode_steps: int
+    seed: Optional[int] = None
     name: Literal["crafter"] = "crafter"
     task: Literal["open_ended"] = "open_ended"
-    max_episode_steps: int = 2000
+    max_episode_steps: int = Field(default=2000)
 
 
 def environment_factory(config: EnvironmentConfig) -> TypedBalrogEnvironmentAdapter:
-    # Balrog requires the config to be in the format:
-    # config.envs.{name_of_env}_kwargs
-    as_dictconfig = DictConfig(
-        {
-            "envs": {
-                f"{config.name}_kwargs": config.model_dump(exclude={"name", "task"}),
-            }
-        }
-    )
-    balrog_env = make_env(config.name, config.task, as_dictconfig)
-    return TypedBalrogEnvironmentAdapter(balrog_env)
+    return TypedBalrogEnvironmentAdapter(config.create_balrog_env())
