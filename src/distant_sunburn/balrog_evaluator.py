@@ -181,6 +181,7 @@ class Evaluator(Generic[MetadataT]):
                 obs = experience.obs
                 reward = experience.reward
                 done = experience.done
+                info = experience.info
 
                 episode_return += reward  # type: ignore
 
@@ -202,7 +203,7 @@ class Evaluator(Generic[MetadataT]):
                     + obs.text.short_term_context,
                     reward=float(reward),
                     done=done,
-                    info=info,
+                    info=experience.info,
                 )
                 trajectory_step_writer(trajectory_step)
 
