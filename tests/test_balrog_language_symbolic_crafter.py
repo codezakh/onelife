@@ -2,7 +2,7 @@ from distant_sunburn.balrog_components import CrafterEnvironmentConfig
 from distant_sunburn.balrog_language_symbolic_crafter import (
     LanguageSymbolicCrafter,
 )
-from distant_sunburn.crafter_symbolic import SymbolicObservation
+from crafter.state_export import WorldState
 
 
 def test_language_symbolic_crafter():
@@ -20,12 +20,12 @@ def test_language_symbolic_crafter():
 
     # Test reset
     reset_exp = env.reset()
-    assert isinstance(reset_exp.info, SymbolicObservation)
+    assert isinstance(reset_exp.info, WorldState)
 
     # Test step
     action = "Move West"
     exp = env.step(action)
-    assert isinstance(exp.info, SymbolicObservation)
+    assert isinstance(exp.info, WorldState)
 
     # Test action validity check
     valid_action = env.check_action_validity("Move West")

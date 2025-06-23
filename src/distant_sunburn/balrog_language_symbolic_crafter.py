@@ -7,9 +7,9 @@ from .balrog_interfaces import (
 )
 from .balrog_components import CrafterEnvironmentConfig
 from .balrog_utilities import get_base_env
-from .crafter_symbolic import CrafterSymbolic, SymbolicObservation, ObservationConfig
 from .typing_utils import implements
 from crafter.env import Env as CrafterEnv
+from crafter.state_export import WorldState, export_world_state
 
 
 class LanguageSymbolicCrafter:
@@ -21,16 +21,19 @@ class LanguageSymbolicCrafter:
         self.crafter_base_env = get_base_env(
             self.language_env, expected_type=CrafterEnv
         )
-        # Initialize symbolic observation generator
-        self.symbolic_state_extractor = CrafterSymbolic(ObservationConfig())
 
-    def reset(self, **kwargs) -> OnResetExperience[SymbolicObservation]:
+    def reset(self, **kwargs) -> OnResetExperience[WorldState]:
         """Reset the environment and return both language and symbolic observations."""
         obs, info = self.language_env.reset(**kwargs)
 
+        assert self.crafter_base_env._step is not None
+        assert self.crafter_base_env._view is not None
+
         # Get symbolic observation
-        symbolic_obs = self.symbolic_state_extractor.get_symbolic_observation(
-            self.crafter_base_env
+        world_state = export_world_state(
+            self.crafter_base_env._world,
+            tuple(self.crafter_base_env._view),
+            self.crafter_base_env._step,
         )
 
         # Create language observation
@@ -45,16 +48,21 @@ class LanguageSymbolicCrafter:
 
         return OnResetExperience(
             obs=language_obs,
-            info=symbolic_obs,
+            info=world_state,
         )
 
-    def step(self, action: str) -> Experience[SymbolicObservation]:
+    def step(self, action: str) -> Experience[WorldState]:
         """Execute action and return both language and symbolic observations."""
         obs, reward, terminated, truncated, info = self.language_env.step(action)
 
+        assert self.crafter_base_env._step is not None
+        assert self.crafter_base_env._view is not None
+
         # Get symbolic observation
-        symbolic_obs = self.symbolic_state_extractor.get_symbolic_observation(
-            self.crafter_base_env
+        world_state = export_world_state(
+            self.crafter_base_env._world,
+            tuple(self.crafter_base_env._view),
+            self.crafter_base_env._step,
         )
 
         # Create language observation
@@ -73,7 +81,7 @@ class LanguageSymbolicCrafter:
             reward=float(reward),
             done=terminated,
             truncated=truncated,
-            info=symbolic_obs,
+            info=world_state,
         )
 
     def get_instruction_prompt(self, instructions: str | None = None) -> str:
@@ -90,4 +98,4 @@ class LanguageSymbolicCrafter:
         return self.language_env.get_stats()
 
 
-implements(EnvironmentProtocol[SymbolicObservation])(LanguageSymbolicCrafter)
+implements(EnvironmentProtocol[WorldState])(LanguageSymbolicCrafter)
