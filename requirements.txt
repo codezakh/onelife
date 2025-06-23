@@ -2,6 +2,10 @@
 #    uv pip compile requirements.in -o requirements.txt
 -e external/BALROG
     # via -r requirements.in
+-e external/crafter_refactored
+    # via
+    #   -r requirements.in
+    #   balrog
 aiohappyeyeballs==2.6.1
     # via aiohttp
 aiohttp==3.11.18
@@ -78,8 +82,6 @@ confection==0.1.5
     #   weasel
 contourpy==1.3.2
     # via matplotlib
-crafter==1.8.3
-    # via balrog
 cryptography==45.0.2
     # via secretstorage
 cycler==0.12.1
@@ -304,6 +306,7 @@ numpy==2.2.5
     #   opencv-python
     #   opencv-python-headless
     #   opensimplex
+    #   pandas
     #   spacy
     #   textworld
     #   thinc
@@ -330,6 +333,8 @@ packaging==25.0
     #   spacy
     #   thinc
     #   weasel
+pandas==2.3.0
+    # via -r requirements.in
 parso==0.8.4
     # via jedi
 pathspec==0.12.1
@@ -422,11 +427,15 @@ pyparsing==3.2.3
 pytest==8.3.5
     # via balrog
 python-dateutil==2.9.0.post0
-    # via matplotlib
+    # via
+    #   matplotlib
+    #   pandas
 python-dotenv==1.1.0
     # via litellm
 python-ulid==3.0.0
     # via -r requirements.in
+pytz==2025.2
+    # via pandas
 pyyaml==6.0.2
     # via
     #   huggingface-hub
@@ -569,6 +578,8 @@ typing-extensions==4.13.2
     #   wandb
 typing-inspection==0.4.0
     # via pydantic
+tzdata==2025.2
+    # via pandas
 uritemplate==4.1.1
     # via google-api-python-client
 urllib3==2.4.0
