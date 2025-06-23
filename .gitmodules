@@ -1,3 +1,6 @@
 [submodule "external/BALROG"]
 	path = external/BALROG
 	url = https://github.com/balrog-ai/BALROG.git
+[submodule "external/crafter_refactored"]
+	path = external/crafter_refactored
+	url = git@github.com:codezakh/crafter_refactored.git
