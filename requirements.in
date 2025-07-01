@@ -9,5 +9,6 @@ hatch
 setuptools
 pandas
 pyro-ppl
+tensordict
 -e external/BALROG
 -e external/crafter_refactored
