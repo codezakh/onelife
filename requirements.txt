@@ -312,6 +312,10 @@ jiter==0.9.0
     # via
     #   anthropic
     #   openai
+jsonpatch==1.33
+    # via -r requirements.in
+jsonpointer==3.0.0
+    # via jsonpatch
 jsonschema==4.23.0
     # via
     #   litellm

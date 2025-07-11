@@ -11,5 +11,6 @@ pandas
 pyro-ppl
 tensordict
 vllm
+jsonpatch
 -e external/BALROG
 -e external/crafter_refactored
