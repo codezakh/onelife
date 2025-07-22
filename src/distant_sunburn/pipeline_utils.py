@@ -176,6 +176,28 @@ class JsonFileTarget:
         self.file_path.touch()
 
 
+class PydanticJsonFileTarget(Generic[BaseModelT]):
+    def __init__(self, file_path: Path | str, model: Type[BaseModelT]):
+        if not isinstance(file_path, Path):
+            file_path = Path(file_path)
+        self.file_path = file_path
+        self.model = model
+
+    def load(self) -> BaseModelT:
+        with open(self.file_path, "r") as f:
+            return self.model.model_validate_json(f.read())
+
+    def save(self, data: BaseModelT):
+        with open(self.file_path, "w") as f:
+            f.write(data.model_dump_json())
+
+    def delete(self):
+        self.file_path.unlink(missing_ok=True)
+
+    def exists(self) -> bool:
+        return self.file_path.exists()
+
+
 class Node(BaseModel):
     id: Union[ULID, str] = Field(union_mode="left_to_right")
     name: str
