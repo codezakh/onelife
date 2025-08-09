@@ -15,3 +15,4 @@ jsonpatch
 swe-rex
 -e external/BALROG
 -e external/crafter_refactored
+-e external/12-distant-sunburn-gameenv

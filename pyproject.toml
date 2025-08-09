@@ -8,6 +8,24 @@ version = "0.0.1"
 description = ""
 readme = "README.md"
 authors = []
+dependencies = [
+    "12-distant-sunburn-gameenv",
+    "balrog",
+    "crafter",
+    "gymnasium>=1.2.0",
+    "hatch>=1.14.1",
+    "ipdb>=0.13.13",
+    "jsonpatch>=1.33",
+    "litellm>=1.75.3",
+    "loguru>=0.7.3",
+    "pandas>=2.3.1",
+    "pydantic>=2.11.7",
+    "pyro-ppl>=1.9.1",
+    "python-ulid>=3.0.0",
+    "setuptools>=79.0.1",
+    "tensordict>=0.9.1",
+    "vllm>=0.10.0",
+]
 
 [tool.hatch.build]
 sources = ["src"]
@@ -20,3 +38,8 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",
 ]
+
+[tool.uv.sources]
+12-distant-sunburn-gameenv = { path = "external/12-distant-sunburn-gameenv", editable = true }
+balrog = { path = "external/BALROG", editable = true }
+crafter = { path = "external/crafter_refactored", editable = true }
