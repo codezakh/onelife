@@ -2,12 +2,25 @@ from typing import Protocol
 import attrs
 from PIL.Image import Image as PILImage
 from typing import Any
-from balrog.client import LLMResponse
 from typing import Literal, Optional
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 from pydantic import BaseModel
 from typing import Union
+from collections import namedtuple
+
+
+LLMResponse = namedtuple(
+    "LLMResponse",
+    [
+        "model_id",
+        "completion",
+        "stop_reason",
+        "input_tokens",
+        "output_tokens",
+        "reasoning",
+    ],
+)
 
 
 @attrs.define

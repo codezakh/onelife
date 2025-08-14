@@ -9,7 +9,7 @@ from anthropic import Anthropic
 from openai import OpenAI
 from pydantic import BaseModel
 
-from .balrog_interfaces import LLMResponse, Message
+from .balrog_interfaces import Message, LLMResponse
 
 httpx_logger = logging.getLogger("httpx")
 httpx_logger.setLevel(logging.WARNING)
