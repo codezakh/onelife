@@ -1,5 +1,5 @@
 from collections import deque
-from typing import List, Optional, Callable, Literal
+from typing import List, Optional, Callable, Literal, Protocol
 from .balrog_interfaces import (
     Message,
     Observation,
@@ -8,15 +8,13 @@ from .balrog_interfaces import (
 )
 import re
 import copy
-from balrog.client import LLMResponse
 from pydantic import BaseModel, Field
 from typing_extensions import Self
-from balrog.environments.env_wrapper import EnvWrapper
-from balrog.environments import make_env
 from omegaconf import DictConfig
 from .balrog_interfaces import EnvironmentProtocol, Text, Experience, OnResetExperience
 from .typing_utils import implements
 from typing import TypeVar, Union
+from .balrog_interfaces import LLMResponse
 
 
 class HistoryPromptBuilderConfig(BaseModel):
@@ -243,8 +241,18 @@ You always have to output one of the above actions at a time and no other text. 
         return lambda: cls(client_factory(), prompt_builder_factory())
 
 
+class BalrogEnvWrapper(Protocol):
+    def reset(self, **kwargs) -> tuple[dict, dict]: ...
+    def step(self, action: str) -> tuple[dict, float, bool, bool, dict]: ...
+    def get_instruction_prompt(self, instructions: str | None) -> str: ...
+    def check_action_validity(self, action: str) -> str: ...
+    @property
+    def failed_candidates(self) -> list[str]: ...
+    def get_stats(self) -> dict: ...
+
+
 class TypedBalrogEnvironmentAdapter:
-    def __init__(self, env: EnvWrapper):
+    def __init__(self, env: BalrogEnvWrapper):
         self.env = env
 
     def reset(self, **kwargs) -> OnResetExperience[dict]:
@@ -318,8 +326,10 @@ class EnvironmentConfig(BaseModel):
             }
         )
 
-    def create_balrog_env(self) -> EnvWrapper:
-        return make_env(self.name, self.task, self.to_balrog_format())
+    def create_balrog_env(
+        self, balrog_env_factory: Callable[[str, str, DictConfig], BalrogEnvWrapper]
+    ) -> BalrogEnvWrapper:
+        return balrog_env_factory(self.name, self.task, self.to_balrog_format())
 
 
 class CrafterEnvironmentConfig(EnvironmentConfig):
@@ -331,7 +341,4 @@ class CrafterEnvironmentConfig(EnvironmentConfig):
     name: Literal["crafter"] = "crafter"
     task: Literal["open_ended"] = "open_ended"
     max_episode_steps: int = Field(default=2000)
-
-
-def environment_factory(config: EnvironmentConfig) -> TypedBalrogEnvironmentAdapter:
-    return TypedBalrogEnvironmentAdapter(config.create_balrog_env())
+    render_image: bool = Field(default=False)
