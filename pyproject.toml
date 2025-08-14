@@ -10,13 +10,16 @@ readme = "README.md"
 authors = []
 dependencies = [
     "12-distant-sunburn-gameenv",
+    "anthropic[balrog]>=0.64.0",
     "crafter",
+    "google-generativeai[balrog]>=0.8.5",
     "gymnasium>=1.2.0",
     "hatch>=1.14.1",
     "ipdb>=0.13.13",
     "jsonpatch>=1.33",
     "litellm>=1.75.3",
     "loguru>=0.7.3",
+    "openai[balrog]>=1.90.0",
     "pandas>=2.3.1",
     "pydantic>=2.11.7",
     "pyro-ppl>=1.9.1",
@@ -41,3 +44,10 @@ filterwarnings = [
 [tool.uv.sources]
 12-distant-sunburn-gameenv = { path = "external/12-distant-sunburn-gameenv", editable = true }
 crafter = { path = "external/crafter_refactored", editable = true }
+
+[dependency-groups]
+balrog = [
+    "anthropic>=0.64.0",
+    "google-generativeai>=0.8.5",
+    "openai>=1.90.0",
+]
