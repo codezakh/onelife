@@ -15,6 +15,7 @@ from .balrog_interfaces import EnvironmentProtocol, Text, Experience, OnResetExp
 from .typing_utils import implements
 from typing import TypeVar, Union
 from .balrog_interfaces import LLMResponse
+from icecream import ic
 
 
 class HistoryPromptBuilderConfig(BaseModel):
@@ -219,13 +220,17 @@ You always have to output one of the above actions at a time and no other text. 
             LLMResponse: The sanitized response.
         """
 
-        def filter_letters(input_string):
-            return re.sub(r"[^a-zA-Z\s:]", "", input_string)
+        ic(answer.completion)
+
+        # def filter_letters(input_string):
+        #     return re.sub(r"[^a-zA-Z\s:]", "", input_string)
 
         final_answer = copy.deepcopy(answer)
-        final_answer = final_answer._replace(
-            completion=filter_letters(final_answer.completion)
-        )
+        # final_answer = final_answer._replace(
+        #     completion=filter_letters(final_answer.completion)
+        # )
+
+        ic(final_answer.completion)
 
         return final_answer
 
@@ -251,64 +256,64 @@ class BalrogEnvWrapper(Protocol):
     def get_stats(self) -> dict: ...
 
 
-class TypedBalrogEnvironmentAdapter:
-    def __init__(self, env: BalrogEnvWrapper):
-        self.env = env
+# class TypedBalrogEnvironmentAdapter:
+#     def __init__(self, env: BalrogEnvWrapper):
+#         self.env = env
 
-    def reset(self, **kwargs) -> OnResetExperience[dict]:
-        obs, info = self.env.reset(**kwargs)
-        short_term_context = obs["text"]["short_term_context"]
-        long_term_context = obs["text"]["long_term_context"]
-        image = obs.get("image", None)
-        return OnResetExperience(
-            Observation(
-                text=Text(
-                    short_term_context=short_term_context,
-                    long_term_context=long_term_context,
-                ),
-                image=image,
-                obs=obs,
-            ),
-            info,
-        )
+#     def reset(self, **kwargs) -> OnResetExperience[dict]:
+#         obs, info = self.env.reset(**kwargs)
+#         short_term_context = obs["text"]["short_term_context"]
+#         long_term_context = obs["text"]["long_term_context"]
+#         image = obs.get("image", None)
+#         return OnResetExperience(
+#             Observation(
+#                 text=Text(
+#                     short_term_context=short_term_context,
+#                     long_term_context=long_term_context,
+#                 ),
+#                 image=image,
+#                 obs=obs,
+#             ),
+#             info,
+#         )
 
-    def step(self, action: str) -> Experience[dict]:
-        raw_obs, reward, terminated, truncated, info = self.env.step(action)
-        short_term_context = raw_obs["text"]["short_term_context"]
-        long_term_context = raw_obs["text"]["long_term_context"]
-        image = raw_obs.get("image", None)
-        obs = Observation(
-            text=Text(
-                short_term_context=short_term_context,
-                long_term_context=long_term_context,
-            ),
-            image=image,
-            obs=raw_obs,
-        )
-        return Experience(
-            obs=obs,
-            action=action,
-            reward=float(reward),
-            done=terminated,
-            truncated=truncated,
-            info=info,
-        )
+#     def step(self, action: str) -> Experience[dict]:
+#         raw_obs, reward, terminated, truncated, info = self.env.step(action)
+#         short_term_context = raw_obs["text"]["short_term_context"]
+#         long_term_context = raw_obs["text"]["long_term_context"]
+#         image = raw_obs.get("image", None)
+#         obs = Observation(
+#             text=Text(
+#                 short_term_context=short_term_context,
+#                 long_term_context=long_term_context,
+#             ),
+#             image=image,
+#             obs=raw_obs,
+#         )
+#         return Experience(
+#             obs=obs,
+#             action=action,
+#             reward=float(reward),
+#             done=terminated,
+#             truncated=truncated,
+#             info=info,
+#         )
 
-    def get_instruction_prompt(self, instructions: str | None = None) -> str:
-        return self.env.get_instruction_prompt(instructions)
+#     def get_instruction_prompt(self, instructions: str | None = None) -> str:
+#         return self.env.get_instruction_prompt(instructions)
 
-    def check_action_validity(self, candidate_action: str) -> str:
-        return self.env.check_action_validity(candidate_action)
+#     def check_action_validity(self, candidate_action: str) -> str:
+#         return self.env.check_action_validity(candidate_action)
 
-    @property
-    def failed_candidates(self) -> list[str]:
-        return self.env.failed_candidates
+#     @property
+#     def failed_candidates(self) -> list[str]:
+#         return self.env.failed_candidates
 
-    def get_stats(self) -> dict:
-        return self.env.get_stats()
+#     def get_stats(self) -> dict:
+#         return self.env.get_stats()
 
 
-implements(EnvironmentProtocol)(TypedBalrogEnvironmentAdapter)
+# implements(EnvironmentProtocol)(TypedBalrogEnvironmentAdapter)
 
 
 class EnvironmentConfig(BaseModel):
@@ -338,7 +343,7 @@ class CrafterEnvironmentConfig(EnvironmentConfig):
     size: tuple[int, int]
     reward: bool
     seed: Optional[int] = None
-    name: Literal["crafter"] = "crafter"
-    task: Literal["open_ended"] = "open_ended"
+    name: str = "crafter"
+    task: str = "open_ended"
     max_episode_steps: int = Field(default=2000)
     render_image: bool = Field(default=False)

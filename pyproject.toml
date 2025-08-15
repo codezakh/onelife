@@ -15,6 +15,7 @@ dependencies = [
     "google-generativeai[balrog]>=0.8.5",
     "gymnasium>=1.2.0",
     "hatch>=1.14.1",
+    "icecream>=2.1.6",
     "ipdb>=0.13.13",
     "jsonpatch>=1.33",
     "litellm>=1.75.3",

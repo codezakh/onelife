@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Protocol
 
 import numpy as np
+from distant_sunburn.distant_sunburn_game_environment_factory import (
+    DistantSunburnConfig,
+)
 from distant_sunburn.io_utils import PydanticJSONLinesWriter
 from distant_sunburn.typing_utils import implements
 from pydantic import BaseModel
@@ -85,7 +88,7 @@ implements(TrajectoryStepWriter)(PydanticTrajectoryStepWriter)
 class EvaluatorConfig(BaseModel):
     num_episodes: int
     max_steps_per_episode: Optional[int] = None
-    environment_config: CrafterEnvironmentConfig
+    environment_config: CrafterEnvironmentConfig | DistantSunburnConfig
     output_dir: Path
     feedback_on_invalid_action: bool = True
     save_images: bool = False
@@ -179,6 +182,7 @@ class Evaluator(Generic[MetadataT]):
             )
 
             action = None
+            step = 0
             for step in range(max_steps_per_episode):
                 # Agent has an act method that returns an LLMResponse
                 response = agent.act(obs, prev_action=action)

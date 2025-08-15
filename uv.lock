@@ -425,6 +425,7 @@ dependencies = [
     { name = "google-generativeai" },
     { name = "gymnasium" },
     { name = "hatch" },
+    { name = "icecream" },
     { name = "ipdb" },
     { name = "jsonpatch" },
     { name = "litellm" },
@@ -454,6 +455,7 @@ requires-dist = [
     { name = "google-generativeai", extras = ["balrog"], specifier = ">=0.8.5" },
     { name = "gymnasium", specifier = ">=1.2.0" },
     { name = "hatch", specifier = ">=1.14.1" },
+    { name = "icecream", specifier = ">=2.1.6" },
     { name = "ipdb", specifier = ">=0.13.13" },
     { name = "jsonpatch", specifier = ">=1.33" },
     { name = "litellm", specifier = ">=1.75.3" },
@@ -1000,6 +1002,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3a/51/1947bd81d75af87e3bb9e34593a4cf118115a8feb451ce7a69044ef1412e/hyperlink-21.0.0.tar.gz", hash = "sha256:427af957daa58bc909471c6c40f74c5450fa123dd093fc53efd2e91d2705a56b", size = 140743, upload-time = "2021-01-08T05:51:20.972Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6e/aa/8caf6a0a3e62863cbb9dab27135660acba46903b703e224f14f447e57934/hyperlink-21.0.0-py2.py3-none-any.whl", hash = "sha256:e6b14c37ecb73e89c77d78cdb4c2cc8f3fb59a885c5b3f819ff4ed80f25af1b4", size = 74638, upload-time = "2021-01-08T05:51:22.906Z" },
+]
+
+[[package]]
+name = "icecream"
+version = "2.1.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "asttokens" },
+    { name = "colorama" },
+    { name = "executing" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/ff/e7718cfeb9ee40b98b3ef3506bc3cdadd3f9fea834241edee97e444e7ebf/icecream-2.1.6.tar.gz", hash = "sha256:f5e7955472aaef413fe84dad8d53b02d8a8637273c1f0fa1eaf08ce239462ce9", size = 17358, upload-time = "2025-08-14T09:11:36.973Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/b8/8be235aee43d2c1b2231ce26fbf3a8a1f4a0f26e4b201fb18354a926c509/icecream-2.1.6-py3-none-any.whl", hash = "sha256:2ff97c7624340e4791cbb439df7bfe16c35095a7864fef412f9bbaaaaab09463", size = 14952, upload-time = "2025-08-14T09:11:35.808Z" },
 ]
 
 [[package]]
