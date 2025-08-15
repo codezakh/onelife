@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Protocol
 
 import numpy as np
-from balrog.utils import get_unique_seed
 from distant_sunburn.io_utils import PydanticJSONLinesWriter
 from distant_sunburn.typing_utils import implements
 from pydantic import BaseModel
@@ -16,14 +15,25 @@ from typing_extensions import Self
 
 from .balrog_components import (
     CrafterEnvironmentConfig,
-    environment_factory,
     EnvironmentConfig,
 )
 from .balrog_interfaces import AgentProtocol, EnvironmentProtocol, MetadataT
 from typing import Generic, TypeAlias
 from .typing_utils import BaseModelT
+import time
+import hashlib
 
 logger = logging.getLogger(__name__)
+
+
+def get_unique_seed(process_num=None, episode_idx=0):
+    """Generate a unique seed using process number, episode index, and high-resolution time."""
+    pid = os.getpid()
+    time_ns = time.time_ns()
+    unique_str = f"{pid}_{process_num}_{episode_idx}_{time_ns}"
+    hashed = hashlib.sha256(unique_str.encode()).hexdigest()
+    seed = int(hashed[:8], 16)
+    return seed
 
 
 class TrajectoryStep(BaseModel, Generic[MetadataT]):

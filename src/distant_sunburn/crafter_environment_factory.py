@@ -16,10 +16,32 @@ from .balrog_interfaces import (
     Text,
 )
 from .typing_utils import implements
+from typing import Optional
+from typing import NamedTuple
 
-MAP_DISPLAY_TO_ENGINE_ACTION = {
-    slug.replace("_", " ").title(): idx
-    for idx, slug in enumerate(crafter.constants.actions)
+MAP_SLUG_TO_ENGINE_ACTION = {
+    slug: idx for idx, slug in enumerate(crafter.constants.actions)
+}
+
+
+MAP_DISPLAY_ACTION_TO_ENGINE_ACTION = {
+    "Noop": MAP_SLUG_TO_ENGINE_ACTION["noop"],
+    "Move West": MAP_SLUG_TO_ENGINE_ACTION["move_left"],
+    "Move East": MAP_SLUG_TO_ENGINE_ACTION["move_right"],
+    "Move North": MAP_SLUG_TO_ENGINE_ACTION["move_up"],
+    "Move South": MAP_SLUG_TO_ENGINE_ACTION["move_down"],
+    "Do": MAP_SLUG_TO_ENGINE_ACTION["do"],
+    "Sleep": MAP_SLUG_TO_ENGINE_ACTION["sleep"],
+    "Place Stone": MAP_SLUG_TO_ENGINE_ACTION["place_stone"],
+    "Place Table": MAP_SLUG_TO_ENGINE_ACTION["place_table"],
+    "Place Furnace": MAP_SLUG_TO_ENGINE_ACTION["place_furnace"],
+    "Place Plant": MAP_SLUG_TO_ENGINE_ACTION["place_plant"],
+    "Make Wood Pickaxe": MAP_SLUG_TO_ENGINE_ACTION["make_wood_pickaxe"],
+    "Make Stone Pickaxe": MAP_SLUG_TO_ENGINE_ACTION["make_stone_pickaxe"],
+    "Make Iron Pickaxe": MAP_SLUG_TO_ENGINE_ACTION["make_iron_pickaxe"],
+    "Make Wood Sword": MAP_SLUG_TO_ENGINE_ACTION["make_wood_sword"],
+    "Make Stone Sword": MAP_SLUG_TO_ENGINE_ACTION["make_stone_sword"],
+    "Make Iron Sword": MAP_SLUG_TO_ENGINE_ACTION["make_iron_sword"],
 }
 
 MAP_DISPLAY_ACTION_TO_DESCRIPTION = {
@@ -46,7 +68,7 @@ MAP_DISPLAY_ACTION_TO_DESCRIPTION = {
 def get_instruction_prompt():
     action_strings = ",\n".join(
         f"{action}: {MAP_DISPLAY_ACTION_TO_DESCRIPTION[action]}"
-        for action in MAP_DISPLAY_TO_ENGINE_ACTION
+        for action in MAP_DISPLAY_ACTION_TO_ENGINE_ACTION
     )
     instruction_prompt = f"""
 You are an agent playing Crafter. The following are the only valid actions you can take in the game, followed by a short description of each action:
@@ -336,7 +358,7 @@ class LanguageSymbolicWrapper:
         dict,
     ]:
         obs, reward, done, info = self.base_env.step(
-            MAP_DISPLAY_TO_ENGINE_ACTION[action]
+            MAP_DISPLAY_ACTION_TO_ENGINE_ACTION[action]
         )
         self.step_count += 1
         truncated = self.step_count >= self.config.max_episode_steps
@@ -360,9 +382,11 @@ class LanguageSymbolicWrapper:
             obs=obs,
         )
 
-    def reset(self, **kwargs) -> OnResetExperience[WorldState]:
+    def reset(self, seed: Optional[int] = None) -> OnResetExperience[WorldState]:
         """Reset the environment and return both language and symbolic observations."""
-        self.base_env.reset(**kwargs)
+        # Crafter's `reset` method does not accept a seed, so we set it after init.
+        self.base_env.reset()
+        self.base_env._seed = seed
         self.step_count = 0
         self.score_tracker = 0
         self.achievements = None
@@ -429,7 +453,7 @@ class LanguageSymbolicWrapper:
         }
 
     def check_action_validity(self, candidate_action: str) -> str:
-        if candidate_action in MAP_DISPLAY_TO_ENGINE_ACTION:
+        if candidate_action in MAP_DISPLAY_ACTION_TO_ENGINE_ACTION:
             return candidate_action
         else:
             self.failed_candidates.append(candidate_action)
