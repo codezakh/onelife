@@ -20,7 +20,11 @@ import textwrap
 from typing import Literal
 from loguru import logger
 
-
+# TODO: Try to make it less conservative by telling it has unlimited lives.
+# Add a default reward that works by rewarding LLMs for maximizing state changes.
+# Maintain a notepad of rules and reward model for adding to the notepad.
+# 1. First try to modify it by using a prompt.
+# 2. If that doesn't work, add some kind of default reward function.
 INSTRUCTION_PROMPT = textwrap.dedent(
     """
     You are an agent playing a 2D tile-based game.
