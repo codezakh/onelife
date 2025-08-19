@@ -214,9 +214,10 @@ This section describes the initial concrete implementations for each protocol.
 *   **Responsibility**: To find the optimal weights for a set of experts by maximizing the log-likelihood of the data.
 *   **Dependencies**: An optimization library like `scipy.optimize`.
 *   **Implementation Notes**:
-    *   The `fit` method will define an objective function: the negative log-likelihood of the `transitions` data given the experts and their weights, plus an L1 regularization term.
+    *   The `fit` method will define an objective function: the negative log-likelihood of a randomly sampled batch of transitions from the dataset (with a configurable batch size, defaulting to 10,000) given the experts and their weights, plus an L1 regularization term.
     *   It will use `scipy.optimize.minimize` with the `L-BFGS-B` method to find the weights that minimize this objective.
-    *   **Scalability Concern**: Fitting on the entire experience buffer at every update cycle is computationally expensive and will not scale in an online setting. The implementation should consider strategies to mitigate this, such as fitting on a fixed-size, random subsample of the buffer, or exploring online optimization methods (e.g., SGD).
+    *   **Batch Sampling**: For each optimization step, the fitter will randomly sample up to `batch_size` transitions from the full dataset. If the dataset has fewer transitions than the batch size, all transitions are used. This approach balances computational efficiency with statistical robustness.
+    *   **Scalability Concern**: While batch sampling helps with computational efficiency, fitting on the entire experience buffer at every update cycle may still be expensive for very large buffers. The implementation should consider strategies to mitigate this, such as using a fixed-size, sliding window of recent experiences, or exploring online optimization methods (e.g., SGD).
 
 #### 5.5. `ThresholdPruner` (implements `PrunerProtocol`)
 *   **Responsibility**: To filter out experts with low weights.
@@ -321,4 +322,4 @@ Finally, here is the conclusion of the revised PRD.
 
 *   **Hierarchical Planner**: The learned `WorldModel` is the final output. Any agent that *uses* this model for planning is a separate component and outside the scope of this PRD.
 *   **Advanced Synthesis Strategies**: The initial implementation will use a single, general-purpose `Synthesizer`. Specialized synthesizers for different types of dynamics can be added later.
-*   **Hyperparameter Optimization**: The learning loop will use fixed, configured hyperparameters (e.g., batch size for synthesis, pruning threshold). An automated hyperparameter tuning system is not in scope.
+*   **Hyperparameter Optimization**: The learning loop will use fixed, configured hyperparameters (e.g., batch size for synthesis, batch size for weight fitting, pruning threshold). An automated hyperparameter tuning system is not in scope.
