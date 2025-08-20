@@ -25,6 +25,7 @@ dependencies = [
     "pydantic>=2.11.7",
     "pyro-ppl>=1.9.1",
     "python-ulid>=3.0.0",
+    "scipy>=1.16.1",
     "setuptools>=79.0.1",
     "tensordict>=0.9.1",
     "vllm>=0.10.0; sys_platform == 'linux'",
