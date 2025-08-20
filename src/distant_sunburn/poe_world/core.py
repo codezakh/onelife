@@ -7,15 +7,15 @@ predictions and the ExpertFunction protocol.
 """
 
 import numpy as np
+import numpy.typing as npt
 from scipy.special import logsumexp
-from typing import Protocol, Any, TypeVar
-import attrs
+from typing import Protocol, Any, TypeVar, Optional
+from typing_extensions import Self
 
 # Type variable for the metadata type used by different environments
 MetadataT = TypeVar("MetadataT")
 
 
-@attrs.define
 class RandomValues:
     """
     Represents a discrete probability distribution over a set of integer or boolean values.
@@ -28,13 +28,13 @@ class RandomValues:
     than the rest.
     """
 
-    values: np.ndarray
-    logscores: np.ndarray = attrs.field()
-
-    @logscores.default
-    def _default_logscores(self) -> np.ndarray:
-        """Defaults to uniform logscores if not provided."""
-        return np.zeros_like(self.values, dtype=float)
+    def __init__(
+        self,
+        values: npt.NDArray[np.int32],
+        logscores: Optional[npt.NDArray[np.float32]] = None,
+    ):
+        self.values = values
+        self.logscores = logscores or np.zeros_like(values, dtype=float)
 
     def sample(self) -> int:
         """Samples a value from the distribution."""
@@ -46,25 +46,28 @@ class RandomValues:
         log_probs = self.logscores - logsumexp(self.logscores)
         try:
             # Find the index of the value and return its log probability
-            return log_probs[np.where(self.values == value)[0][0]]
+            return float(log_probs[np.where(self.values == value)[0][0]])
         except IndexError:
             # The value was not a possible outcome under this distribution
             return -np.inf
 
-    def add_noise_to_full_domain(
-        self, all_possible_values: np.ndarray, noise_logScore: float = -10.0
-    ) -> "RandomValues":
-        """
-        Expands this distribution to cover all possible values in the domain.
-        Values not in the current distribution get the noise_logScore.
-        This converts expert "opinions" into full probability distributions.
-        """
-        new_logscores = np.full_like(all_possible_values, noise_logScore, dtype=float)
-        for i, val in enumerate(self.values):
-            if val in all_possible_values:
-                idx = np.where(all_possible_values == val)[0][0]
-                new_logscores[idx] = self.logscores[i]
-        return RandomValues(values=all_possible_values, logscores=new_logscores)
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(values={self.values}, logscores={self.logscores})"
+
+    # def add_noise_to_full_domain(
+    #     self, all_possible_values: np.ndarray, noise_logScore: float = -10.0
+    # ) -> Self:
+    #     """
+    #     Expands this distribution to cover all possible values in the domain.
+    #     Values not in the current distribution get the noise_logScore.
+    #     This converts expert "opinions" into full probability distributions.
+    #     """
+    #     new_logscores = np.full_like(all_possible_values, noise_logScore, dtype=float)
+    #     for i, val in enumerate(self.values):
+    #         if val in all_possible_values:
+    #             idx = np.where(all_possible_values == val)[0][0]
+    #             new_logscores[idx] = self.logscores[i]
+    #     return RandomValues(values=all_possible_values, logscores=new_logscores)
 
 
 class ExpertFunction(Protocol[MetadataT]):

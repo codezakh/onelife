@@ -10,7 +10,8 @@ import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Protocol
+from typing import Protocol, Union
+from ..core import RandomValues
 
 from loguru import logger
 
@@ -213,7 +214,6 @@ def transition_function(state: GameState, action: Action, laws: list[Law]) -> Ga
     return new_state
 
 
-# Default laws for convenience
 DEFAULT_MOVEMENT_LAW = MovementLaw()
 DEFAULT_LIGHT_LAW = LightLaw()
 DEFAULT_LAWS = [DEFAULT_MOVEMENT_LAW, DEFAULT_LIGHT_LAW]

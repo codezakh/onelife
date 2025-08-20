@@ -15,6 +15,7 @@ from typing import Any
 
 from ..core import RandomValues, ExpertFunction
 from .environment import GameState, Action
+from ...typing_utils import implements
 
 
 def correct_movement_expert(
@@ -61,7 +62,7 @@ def correct_movement_expert(
     new_position = max(0, min(new_position, current_state.config.width - 1))
 
     # Assign the prediction using RandomValues
-    current_state.player.position = RandomValues(values=np.array([new_position]))
+    current_state.player.position = RandomValues(values=np.array([new_position]))  # type: ignore
 
 
 def correct_light_expert(
@@ -90,7 +91,7 @@ def correct_light_expert(
             new_state = light.is_on
 
         # Assign the prediction using RandomValues
-        light.is_on = RandomValues(values=np.array([new_state]))
+        light.is_on = RandomValues(values=np.array([new_state]))  # type: ignore
 
 
 def incorrect_movement_expert_ignores_switch(
@@ -132,7 +133,7 @@ def incorrect_movement_expert_ignores_switch(
     new_position = max(0, min(new_position, current_state.config.width - 1))
 
     # Assign the prediction using RandomValues
-    current_state.player.position = RandomValues(values=np.array([new_position]))
+    current_state.player.position = RandomValues(values=np.array([new_position]))  # type: ignore
 
 
 def incorrect_movement_expert_ignores_slip(
@@ -173,7 +174,7 @@ def incorrect_movement_expert_ignores_slip(
     new_position = max(0, min(new_position, current_state.config.width - 1))
 
     # Assign the prediction using RandomValues
-    current_state.player.position = RandomValues(values=np.array([new_position]))
+    current_state.player.position = RandomValues(values=np.array([new_position]))  # type: ignore
 
 
 def incorrect_light_expert_is_deterministic(
@@ -196,34 +197,7 @@ def incorrect_light_expert_is_deterministic(
         new_state = not light.is_on
 
         # Assign the prediction using RandomValues
-        light.is_on = RandomValues(values=np.array([new_state]))
-
-
-def incorrect_light_expert_action_dependent(
-    current_state: GameState, action: Action, **context: Any
-) -> None:
-    """
-    Incorrect expert that models lights as action-dependent.
-
-    This expert incorrectly models that lights only toggle if the player moves right.
-    This introduces a false dependency between player actions and light behavior.
-
-    Args:
-        current_state: The current game state to modify in-place
-        action: The action being taken
-        **context: Additional context (unused)
-    """
-    # Check if the player is moving right
-    if action == Action.MOVE_RIGHT:
-        # If moving right, predict all lights will toggle
-        for light in current_state.lights:
-            new_state = not light.is_on
-            light.is_on = RandomValues(values=np.array([new_state]))
-    else:
-        # If not moving right, predict lights will not change
-        for light in current_state.lights:
-            new_state = light.is_on
-            light.is_on = RandomValues(values=np.array([new_state]))
+        light.is_on = RandomValues(values=np.array([new_state]))  # type: ignore
 
 
 # Collection of all experts for easy access
@@ -236,7 +210,6 @@ INCORRECT_EXPERTS = [
     incorrect_movement_expert_ignores_switch,
     incorrect_movement_expert_ignores_slip,
     incorrect_light_expert_is_deterministic,
-    incorrect_light_expert_action_dependent,
 ]
 
 ALL_EXPERTS = CORRECT_EXPERTS + INCORRECT_EXPERTS
