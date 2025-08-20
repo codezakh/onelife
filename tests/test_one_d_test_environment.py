@@ -6,9 +6,8 @@ validating all mechanics and ensuring reproducibility.
 """
 
 import random
-import pytest
 
-from distant_sunburn.one_d_test_environment import (
+from distant_sunburn.poe_world.benchmark_1d.environment import (
     Action,
     GameState,
     Light,
@@ -18,6 +17,9 @@ from distant_sunburn.one_d_test_environment import (
     WorldConfig,
     initial_state,
     transition_function,
+)
+from distant_sunburn.poe_world.benchmark_1d.environment import (
+    DEFAULT_LAWS,
 )
 
 
@@ -329,8 +331,6 @@ class TestIntegration:
     def test_complete_gameplay_sequence(self):
         """Test a complete gameplay sequence with default laws."""
         # Arrange
-        from distant_sunburn.one_d_test_environment import DEFAULT_LAWS
-
         state = initial_state(width=8, num_lights=2, seed=123)
 
         # Act - Play a sequence of actions
