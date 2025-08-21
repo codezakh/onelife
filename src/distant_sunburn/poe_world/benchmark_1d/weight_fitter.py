@@ -45,12 +45,16 @@ def combine_expert_predictions(
     """
     Combine expert predictions using learned weights via matrix multiplication.
 
+    WARNING: This function breaks PyTorch gradient flow by calling .detach().numpy().
+    For weight fitting optimization, use combine_expert_predictions_torch() instead
+    to preserve gradients. This function is kept for non-optimization use cases.
+
     Args:
         expert_predictions: List of RandomValues from each expert
         weights: Tensor of expert weights [n_experts]
 
     Returns:
-        Combined RandomValues distribution
+        Combined RandomValues distribution (gradients broken)
     """
     if not expert_predictions:
         raise ValueError("No expert predictions provided")
@@ -67,6 +71,7 @@ def combine_expert_predictions(
     combined_logscores = logscores_matrix.T @ weights
 
     # Return combined distribution using the same values as the first expert
+    # WARNING: .detach().numpy() breaks gradient flow - use _torch version for optimization
     return RandomValues(
         values=expert_predictions[0].values,
         logscores=combined_logscores.detach().numpy(),
@@ -78,6 +83,10 @@ def combine_expert_predictions_torch(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     PyTorch-native version of combine_expert_predictions that preserves gradients.
+
+    CRITICAL: This function preserves PyTorch gradient flow by keeping all operations
+    in tensor form. Use this version for weight fitting optimization. Never call
+    .detach() or .numpy() on the returned tensors during optimization.
 
     Args:
         expert_predictions: List of RandomValues from each expert
@@ -111,6 +120,10 @@ def evaluate_log_probability_torch(
 ) -> torch.Tensor:
     """
     PyTorch-native log probability evaluation that preserves gradients.
+
+    CRITICAL: This function preserves PyTorch gradient flow by operating entirely
+    in tensor space. The returned tensor maintains gradients with respect to the
+    input logscores, enabling backpropagation through expert weight optimization.
 
     Args:
         values_tensor: Tensor of possible values [n_values]
@@ -314,6 +327,10 @@ class MaxLikelihoodWeightFitter:
     ) -> torch.Tensor:
         """
         Compute the negative log-likelihood loss for the given weights.
+
+        CRITICAL: This function preserves PyTorch gradient flow by using the _torch
+        versions of combination and evaluation functions. Breaking the gradient flow
+        here (e.g., by calling .detach() or .numpy()) will prevent weight learning.
 
         The loss is computed per-attribute, per-object, per-transition as described
         in the supplementary material.
