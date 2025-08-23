@@ -8,7 +8,7 @@ environments.
 
 import random
 
-from .core import (
+from ..core import (
     SymbolicEnvironment,
     TrajectoryCollector,
     EditDistanceCalculator,
@@ -19,7 +19,7 @@ from .components import (
     JSONPatchEditDistance,
     Semantic1DDistractorGenerator,
 )
-from ..poe_world.benchmark_1d.environment import (
+from ...poe_world.benchmark_1d.environment import (
     GameState,
     Action,
     WorldConfig,

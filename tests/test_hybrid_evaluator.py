@@ -12,7 +12,7 @@ from distant_sunburn.evaluator import (
     TrueTransitionWorldModel,
     NullWorldModel,
 )
-from distant_sunburn.evaluator.components import (
+from distant_sunburn.evaluator.simple_1d_env.components import (
     JSONPatchEditDistance,
     Semantic1DDistractorGenerator,
 )

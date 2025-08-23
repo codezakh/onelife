@@ -17,11 +17,11 @@ from .core import (
     EvaluationResults,
     HybridEvaluator,
 )
-from .adapters import (
+from .simple_1d_env.adapters import (
     Environment1DAdapter,
     Environment1DWrapper,
 )
-from .components import (
+from .simple_1d_env.components import (
     RandomPolicy1DTrajectoryCollector,
     JSONPatchEditDistance,
     StructuralEditDistance,

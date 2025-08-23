@@ -11,11 +11,11 @@ from typing import Any, TypeVar
 
 import jsonpatch
 
-from .core import (
+from ..core import (
     SymbolicTransition,
     SymbolicEnvironment,
 )
-from ..poe_world.benchmark_1d.environment import (
+from ...poe_world.benchmark_1d.environment import (
     GameState,
     Action,
     WorldConfig,
