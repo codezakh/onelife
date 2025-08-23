@@ -1,0 +1,45 @@
+---
+globs: tests/**/*.py
+alwaysApply: false
+---
+### Guiding Principle
+
+A test should fail if and only if the code's intended behavior is broken. It should not fail when implementation details change.
+
+### What to Test
+1.  **Test Behavior, Not Implementation.**
+    *   Test the public API of a function or class.
+    *   **Bad:** Asserting the value of a private variable (`_internal_cache`).
+    *   **Good:** Calling a public method and asserting its return value is correct.
+
+2.  **Test Edge Cases.**
+    *   Test what happens with empty inputs (`[]`, `""`, `0`), `None`, and invalid values.
+    *   Test boundary conditions (e.g., for a function that works on numbers 1-100, test 1, 100, 0, and 101).
+
+### How to Write the Test
+
+1.  **One Logical Assertion Per Test.**
+    *   A test function should verify a single behavior. The test's name should describe that behavior.
+    *   **Bad:** `test_user_model()` which tests creation, updating, and password hashing.
+    *   **Good:** Three separate tests: `test_user_creation_sets_uuid()`, `test_update_user_changes_email()`, `test_password_is_hashed_on_set()`.
+    *   *Note: This does not mean only one `assert` statement. A single logical check may require asserting multiple related properties of an object.*
+
+2.  **Assert the Minimum Necessary.**
+    *   When checking a returned object, only assert the properties relevant to the test. Do not assert every field.
+    *   **Bad:** A function returns a `User` object. The test asserts `user.id`, `user.name`, `user.email`, `type(user.id)`, `type(user.name)`, etc.
+    *   **Good:** The function being tested is `update_email()`. The test asserts only that `user.email` has the new value.
+
+3.  **Control Randomness and External Systems.**
+    *   If a function calls `random.choice()`, use `monkeypatch.setattr()` or `mocker.patch()` to make it return a predictable value or use a fixed seed.
+    *   Mock all network calls and database connections. A unit test must not depend on external services.
+
+### What NOT to Test
+
+1.  **Do Not Test the Language, Environment, or Framework.**
+    *   **Example:** Do not test that a dataclass sets a default value correctly. Python does that for you. Your code has no logic there to test.
+
+2.  **Do Not Test Trivial Code.**
+    *   Do not test simple getters or setters that just read or write an attribute without logic.
+
+3.  **Do Not Test Third-Party Libraries.**
+    *   Assume `requests.get()` works. Your test should verify that your code *calls* `requests.get()` with the correct URL, not that it actually performs an HTTP request. Mock the library call and assert it was called correctly.
