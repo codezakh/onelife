@@ -8,7 +8,7 @@ for testing the PoE-World expert synthesis and weight-fitting pipeline.
 import copy
 import random
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Protocol, Union
 from ..core import RandomValues
@@ -54,7 +54,7 @@ class GameState:
     config: WorldConfig
     player: Player
     lights: list[Light]
-    rng: random.Random
+    rng: random.Random = field(compare=False)
 
 
 class Law(Protocol):

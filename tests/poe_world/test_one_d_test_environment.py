@@ -23,6 +23,34 @@ from distant_sunburn.poe_world.benchmark_1d.environment import (
 )
 
 
+class TestGameStateEquality:
+    def test_equality(self):
+        """Test that GameState objects are equal if their player positions and light states are equal."""
+        config = WorldConfig(width=10, switch_point=5)
+        player1 = Player(position=3)
+        player2 = Player(position=3)
+        light1 = Light(position=1, is_on=False)
+        light2 = Light(position=1, is_on=False)
+        rng1 = random.Random(42)
+        rng2 = random.Random(84)
+        state1 = GameState(config=config, player=player1, lights=[light1], rng=rng1)
+        state2 = GameState(config=config, player=player2, lights=[light2], rng=rng2)
+        assert state1 == state2
+
+    def test_inequality(self):
+        """Test that GameState objects are not equal if their player positions or light states are different."""
+        config = WorldConfig(width=10, switch_point=5)
+        player1 = Player(position=3)
+        player2 = Player(position=4)
+        light1 = Light(position=1, is_on=False)
+        light2 = Light(position=1, is_on=True)
+        rng1 = random.Random(42)
+        rng2 = random.Random(84)
+        state1 = GameState(config=config, player=player1, lights=[light1], rng=rng1)
+        state2 = GameState(config=config, player=player2, lights=[light2], rng=rng2)
+        assert state1 != state2
+
+
 class TestMovementLaw:
     """Test cases for the MovementLaw."""
 
