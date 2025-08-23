@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+---
+Avoid empty verbosity and bloviation. There is generally no need to provide verbose summaries of what you have done at the end of a task. There is also no need to provide "example scripts" of how to run a feature you've added. You should be provided clear acceptance criteria for any task you are given. If you have not been provided with acceptance criteria, you should ask for them or work with the user to define them. Then do no more work than needed to meet the acceptance criteria.
