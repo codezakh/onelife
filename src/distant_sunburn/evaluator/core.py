@@ -153,18 +153,21 @@ class HybridEvaluator(Generic[SymbolicStateT]):
             # 5. Construct candidate set
             candidates = [transition.next_metadata, pred_state] + distractors
 
-            # 6. Evaluate log probabilities
-            log_probs = {
-                candidate: world_model.evaluate_log_probability(
+            # 6. Evaluate log probabilities using indices
+            log_probs = []
+            for candidate in candidates:
+                log_prob = world_model.evaluate_log_probability(
                     candidate, transition.prev_metadata, transition.action
                 )
-                for candidate in candidates
-            }
+                log_probs.append(log_prob)
 
             # 7. Check discriminative success
-            max_prob = max(log_probs.values())
-            true_state_prob = log_probs[transition.next_metadata]
-            discriminative_successes.append(true_state_prob == max_prob)
+            # Index 0 is the true next state, index 1 is the predicted state
+            max_prob_idx = max(range(len(log_probs)), key=lambda i: log_probs[i])
+            true_state_prob = log_probs[0]  # True state is always at index 0
+            discriminative_successes.append(
+                max_prob_idx == 0
+            )  # True state should have highest probability
 
         # Convert distractor type results to means
         distractor_type_means = {
