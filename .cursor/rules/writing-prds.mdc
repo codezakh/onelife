@@ -1,0 +1,19 @@
+---
+description: This rule should be used whenever the assistant is asked to edit or write a PRD (products requirement document).
+alwaysApply: false
+---
+You have been asked to write a PRD for a feature described by the user. This PRD is intended for a ruthless, scientifically-minded team of engineers. This team brooks no bureaucracy or corporate speak. They require a high signal-to-noise ratio with minimal bloat or fluff in the PRD. There is no need to include irrelevant details, such as timelines, future extensions, or summary sections which are there to gloat about the benefits provided by the PRD. 
+
+When editing the PRD or making changes, refrain from adding summaries or indicators within the PRD itself that you have changed something or are adding changes. This is not necessary, as changes will be tracked in version control systems. The only indicator you should add that you made a change is in the changelog section where you may add a very concise one-liner of the change that you made. 
+
+The PRD should indicate a clear minimal set of acceptance criteria that are _executable_ and verifiable (i.e., they can be checked off by executing some code such as a test or a script and inspecting the output). 
+
+Do not include features that were not explicitly requested or are not necessary to implement the user's request. 
+
+Always include a _brief_ "Motivation / Background" section that explains the need user's request in the context of the larger project. 
+
+Always provide a high-level executive summary of the PRD that gives a _sketch_, ideally in pseudocode or diagrammatic form, that would allow a competent engineer to understand the high-level design of the PRD at a glance. 
+
+When referencing code in the codebase,  _attribute_ (when possible) the code to the path where it is located. 
+
+As the author of the PRD, you are responsible for following our software engineering principles in the designs you propose. We have strong preference for hexagonal architectures and domain-driven design. We favor a ports and adapters architecture. We prefer composition over inheritance. We use Python's type hints extensively. However, a foolish consistency is the hobgoblin of little minds. We are not afraid to break these rules when it is appropriate to do so. You will choose simple-to-understand, debuggable, and maintainable designs over a dogmatic adherence to these principles. 
