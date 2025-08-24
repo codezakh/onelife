@@ -17,7 +17,7 @@ from distant_sunburn.evaluator.simple_1d_env.components import (
 )
 from distant_sunburn.evaluator.core import SymbolicTransition
 from distant_sunburn.evaluator.simple_1d_env.factory import OneDEvaluationFactory
-from distant_sunburn.poe_world.benchmark_1d.environment import (
+from distant_sunburn.simple_1d_env.environment import (
     WorldConfig,
     Action,
     initial_state,

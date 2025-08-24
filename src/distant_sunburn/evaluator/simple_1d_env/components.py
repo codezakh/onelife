@@ -18,7 +18,7 @@ from ..core import (
     DistractorGenerator,
     EditDistanceCalculator,
 )
-from ...poe_world.benchmark_1d.environment import (
+from ...simple_1d_env.environment import (
     GameState,
     Action,
     WorldConfig,

@@ -10,7 +10,7 @@ from .components import (
     Semantic1DDistractorGenerator,
     JSONPatchEditDistance,
 )
-from ...poe_world.benchmark_1d.environment import (
+from ...simple_1d_env.environment import (
     GameState,
     WorldConfig,
     default_transition_function,

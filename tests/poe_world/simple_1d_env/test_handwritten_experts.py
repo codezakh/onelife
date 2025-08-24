@@ -10,14 +10,14 @@ import copy
 import random
 from typing import cast
 
-from distant_sunburn.poe_world.benchmark_1d.environment import (
+from distant_sunburn.simple_1d_env.environment import (
     Action,
     GameState,
     Light,
     Player,
     WorldConfig,
 )
-from distant_sunburn.poe_world.benchmark_1d.handwritten_experts import (
+from distant_sunburn.poe_world.simple_1d_env.handwritten_experts import (
     correct_movement_expert,
     correct_light_expert,
     incorrect_movement_expert_ignores_switch,

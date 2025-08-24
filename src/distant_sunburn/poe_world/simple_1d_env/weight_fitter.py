@@ -20,7 +20,7 @@ from ..core import (
     SymbolicTransition,
     WeightFitterProtocol,
 )
-from .environment import GameState
+from ...simple_1d_env.environment import GameState
 from ...typing_utils import implements
 
 

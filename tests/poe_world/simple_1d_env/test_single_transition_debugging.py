@@ -15,18 +15,18 @@ import copy
 from typing import List
 
 from distant_sunburn.poe_world.core import SymbolicTransition
-from distant_sunburn.poe_world.benchmark_1d.environment import (
+from distant_sunburn.simple_1d_env.environment import (
     GameState,
     Player,
     Light,
     WorldConfig,
     Action,
 )
-from distant_sunburn.poe_world.benchmark_1d.handwritten_experts import (
+from distant_sunburn.poe_world.simple_1d_env.handwritten_experts import (
     correct_movement_expert,
     incorrect_movement_expert_ignores_switch,
 )
-from distant_sunburn.poe_world.benchmark_1d.weight_fitter import (
+from distant_sunburn.poe_world.simple_1d_env.weight_fitter import (
     MaxLikelihoodWeightFitter,
     combine_expert_predictions_torch,
     evaluate_log_probability_torch,

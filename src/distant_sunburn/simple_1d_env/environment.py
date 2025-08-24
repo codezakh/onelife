@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Protocol, Union
-from ..core import RandomValues
+from ..poe_world.core import RandomValues
 
 from loguru import logger
 

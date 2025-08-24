@@ -17,7 +17,7 @@ from ..core import (
     SymbolicTransition,
     WorldModelProtocol,
 )
-from .environment import GameState, Action
+from ...simple_1d_env.environment import GameState, Action
 from .weight_fitter import expand_to_full_domain, combine_expert_predictions
 from ...typing_utils import implements
 
