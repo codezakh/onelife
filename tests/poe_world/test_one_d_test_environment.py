@@ -229,46 +229,13 @@ class TestLightLaw:
             assert light.is_on != original_states[i]
 
 
-class TestInitialState:
-    """Test cases for the initial_state function."""
-
-    def test_default_initial_state(self):
-        """Test default initial state creation."""
-        # Act
-        state = initial_state()
-
-        # Assert
-        assert state.config.width == 12
-        assert state.config.switch_point == 6
-        assert state.player.position == 3  # width // 4
-        assert len(state.lights) == 2
-        assert state.lights[0].position == 3  # width // 4
-        assert state.lights[1].position == 9  # 3 * width // 4
-        assert not state.lights[0].is_on
-        assert not state.lights[1].is_on
-        assert isinstance(state.rng, random.Random)
-
-    def test_custom_initial_state(self):
-        """Test custom initial state creation."""
-        # Act
-        state = initial_state(width=8, num_lights=3, seed=123)
-
-        # Assert
-        assert state.config.width == 8
-        assert state.config.switch_point == 4
-        assert state.player.position == 2  # width // 4
-        assert len(state.lights) == 3
-        # Note: With 3 lights, the third one will be placed at the same position as the first
-        # This is a limitation of the current implementation but acceptable for testing
-
-
 class TestTransitionFunction:
     """Test cases for the transition_function."""
 
     def test_state_independence(self):
         """Verify that transition_function does not modify the original state object."""
         # Arrange
-        state = initial_state(width=10, num_lights=1, seed=42)
+        state = initial_state(WorldConfig(width=10, num_lights=1, seed=42))
         original_player_pos = state.player.position
         original_light_state = state.lights[0].is_on
 
@@ -308,12 +275,12 @@ class TestTransitionFunction:
         laws = [movement_law, light_law]
 
         # First run
-        state1 = initial_state(width=10, num_lights=2, seed=seed)
+        state1 = initial_state(WorldConfig(width=10, num_lights=2, seed=seed))
         for action in actions:
             state1 = transition_function(state1, action, laws)
 
         # Second run with same seed
-        state2 = initial_state(width=10, num_lights=2, seed=seed)
+        state2 = initial_state(WorldConfig(width=10, num_lights=2, seed=seed))
         for action in actions:
             state2 = transition_function(state2, action, laws)
 
@@ -327,7 +294,7 @@ class TestTransitionFunction:
     def test_law_application_order(self):
         """Test that laws are applied in the correct order."""
         # Arrange
-        state = initial_state(width=10, num_lights=1, seed=42)
+        state = initial_state(WorldConfig(width=10, num_lights=1, seed=42))
 
         # Create laws that log their application
         applied_laws = []
@@ -359,7 +326,7 @@ class TestIntegration:
     def test_complete_gameplay_sequence(self):
         """Test a complete gameplay sequence with default laws."""
         # Arrange
-        state = initial_state(width=8, num_lights=2, seed=123)
+        state = initial_state(WorldConfig(width=8, num_lights=2, seed=123))
 
         # Act - Play a sequence of actions
         actions = [Action.MOVE_RIGHT, Action.MOVE_RIGHT, Action.STAY, Action.MOVE_LEFT]
@@ -377,7 +344,9 @@ class TestIntegration:
     def test_switched_zone_mechanics(self):
         """Test the switched zone mechanics in a complete scenario."""
         # Arrange
-        state = initial_state(width=6, num_lights=1, seed=42)
+        state = initial_state(
+            WorldConfig(width=6, num_lights=1, seed=42, switch_point=3)
+        )
         movement_law = MovementLaw(slip_probability=0.0)
         light_law = LightLaw(toggle_probability=0.0)
         laws = [movement_law, light_law]

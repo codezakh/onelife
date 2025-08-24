@@ -43,8 +43,15 @@ class Light:
 class WorldConfig:
     """Immutable configuration for the world."""
 
-    width: int
-    switch_point: int  # The first coordinate in the "switched" half
+    width: int = 12
+    switch_point: int = 6  # The first coordinate in the "switched" half
+    seed: int = 42  # Default seed for reproducibility
+    num_lights: int = 2  # Number of lights in the world
+
+    # validate that switch_point is within the width
+    def __post_init__(self):
+        if self.switch_point < 0 or self.switch_point >= self.width:
+            raise ValueError(f"switch_point must be within the width: {self.width}")
 
 
 @dataclass
@@ -150,7 +157,7 @@ class LightLaw:
                 )
 
 
-def initial_state(width: int = 12, num_lights: int = 2, seed: int = 42) -> GameState:
+def initial_state(world_config: WorldConfig) -> GameState:
     """Create the initial state for the 1D environment.
 
     Args:
@@ -162,30 +169,28 @@ def initial_state(width: int = 12, num_lights: int = 2, seed: int = 42) -> GameS
         Initial game state
     """
     # Create configuration
-    switch_point = width // 2
-    config = WorldConfig(width=width, switch_point=switch_point)
 
     # Create player at fixed starting position
-    player = Player(position=width // 4)
+    player = Player(position=world_config.width // 4)
 
     # Create lights at fixed positions
     lights = []
-    for i in range(num_lights):
+    for i in range(world_config.num_lights):
         # Place lights in different halves of the world
         if i == 0:
-            light_pos = width // 4  # First quarter
+            light_pos = world_config.width // 4  # First quarter
         else:
-            light_pos = 3 * width // 4  # Third quarter
+            light_pos = 3 * world_config.width // 4  # Third quarter
         lights.append(Light(position=light_pos, is_on=False))
 
     # Initialize random number generator
-    rng = random.Random(seed)
+    rng = random.Random(world_config.seed)
 
-    state = GameState(config=config, player=player, lights=lights, rng=rng)
+    state = GameState(config=world_config, player=player, lights=lights, rng=rng)
 
     logger.info(
-        f"Created initial state: width={width}, player_pos={player.position}, "
-        f"num_lights={num_lights}, seed={seed}"
+        f"Created initial state: width={world_config.width}, player_pos={player.position}, "
+        f"num_lights={world_config.num_lights}, seed={world_config.seed}"
     )
 
     return state

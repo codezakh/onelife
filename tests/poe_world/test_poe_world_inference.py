@@ -20,6 +20,7 @@ from distant_sunburn.poe_world.benchmark_1d.environment import (
     Action,
     DEFAULT_LAWS,
     GameState,
+    WorldConfig,
 )
 from distant_sunburn.poe_world.benchmark_1d.handwritten_experts import (
     CORRECT_EXPERTS,
@@ -49,7 +50,7 @@ def generate_random_data(
     np.random.seed(seed)
 
     transitions = []
-    current_state = initial_state(seed=seed)
+    current_state = initial_state(WorldConfig(seed=seed))
 
     for _ in range(n_transitions):
         # Choose random action
@@ -189,7 +190,7 @@ def test_world_model_sampling():
     world_model = PoEWorldModel(weighted_experts)
 
     # Sample from the initial state
-    initial = initial_state(seed=789)
+    initial = initial_state(WorldConfig(seed=789))
 
     # Try sampling with different actions
     for action in [Action.MOVE_LEFT, Action.MOVE_RIGHT, Action.STAY]:
