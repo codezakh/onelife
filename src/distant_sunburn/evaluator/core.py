@@ -33,7 +33,7 @@ class EvaluatableWorldModel(Protocol[SymbolicStateT]):
 class SymbolicEnvironment(Protocol[SymbolicStateT]):
     """Minimal protocol for symbolic environments."""
 
-    def transition(self, state: SymbolicStateT, action: Any) -> SymbolicStateT:
+    def __call__(self, state: SymbolicStateT, action: Any) -> SymbolicStateT:
         """True transition function: (s, a) -> s'"""
         ...
 
@@ -51,7 +51,7 @@ class TrajectoryCollector(Protocol[SymbolicStateT]):
 class EditDistanceCalculator(Protocol[SymbolicStateT_contra]):
     """Protocol for computing edit distances between states."""
 
-    def compute_distance(
+    def __call__(
         self, state1: SymbolicStateT_contra, state2: SymbolicStateT_contra
     ) -> int | float:
         """Compute structured edit distance between two states"""
@@ -61,7 +61,7 @@ class EditDistanceCalculator(Protocol[SymbolicStateT_contra]):
 class DistractorGenerator(Protocol[SymbolicStateT]):
     """Protocol for generating plausible but incorrect next states."""
 
-    def generate_distractors(
+    def __call__(
         self,
         transition: "SymbolicTransition[SymbolicStateT]",
         all_transitions: list["SymbolicTransition[SymbolicStateT]"],
@@ -127,13 +127,13 @@ class HybridEvaluator(Generic[SymbolicStateT]):
             )
 
             # 3. Measure generative error using injected calculator
-            gen_error = self.ctx.edit_distance_calculator.compute_distance(
+            gen_error = self.ctx.edit_distance_calculator(
                 pred_state, transition.next_metadata
             )
             generative_errors.append(gen_error)
 
             # 4. Generate distractors using injected generator
-            distractors = self.ctx.distractor_generator.generate_distractors(
+            distractors = self.ctx.distractor_generator(
                 transition, self.ctx.test_transitions, self.ctx.config.num_distractors
             )
 

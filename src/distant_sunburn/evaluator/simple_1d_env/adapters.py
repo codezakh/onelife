@@ -35,7 +35,7 @@ class Environment1DWrapper:
         self.config = config
         self.base_seed = seed
 
-    def transition(self, state: GameState, action: Action) -> GameState:
+    def __call__(self, state: GameState, action: Action) -> GameState:
         """Apply transition function with deterministic randomness."""
         return transition_function(state, action, DEFAULT_LAWS)
 

@@ -72,12 +72,12 @@ def test_edit_distance_calculation():
     state2 = initial_state(seed=2)
 
     # Calculate distance
-    distance = calc.compute_distance(state1, state2)
+    distance = calc(state1, state2)
 
     assert distance >= 0
 
     # Distance to self should be 0
-    self_distance = calc.compute_distance(state1, state1)
+    self_distance = calc(state1, state1)
     assert self_distance == 0
 
 
@@ -93,7 +93,8 @@ def test_distractor_generation():
     transition = SymbolicTransition(state1, Action.MOVE_RIGHT, state2)
 
     # Generate distractors
-    generator.generate_distractors(transition, [transition], num_distractors=3)
+    distractors = generator(transition, [transition], num_distractors=3)
+    assert len(distractors) == 3
 
 
 def test_baseline_world_models():
@@ -105,9 +106,7 @@ def test_baseline_world_models():
 
     # Test true transition model
     true_model = TrueTransitionWorldModel(environment, equal_fn=lambda x, y: x == y)
-    state = adapter.create_environment().transition(
-        initial_state(seed=1), Action.MOVE_RIGHT
-    )
+    state = environment(initial_state(seed=1), Action.MOVE_RIGHT)
 
     # Should predict the same as environment
     pred_state = true_model.sample_next_state(initial_state(seed=1), Action.MOVE_RIGHT)

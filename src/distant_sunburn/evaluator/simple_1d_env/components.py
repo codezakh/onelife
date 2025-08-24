@@ -41,7 +41,7 @@ class RandomPolicy1DTrajectoryCollector:
 
         for _ in range(num_transitions):
             action = self.rng.choice(self.actions)
-            next_state = environment.transition(state, action)
+            next_state = environment(state, action)
             transitions.append(SymbolicTransition(state, action, next_state))
             state = next_state
 
@@ -51,7 +51,7 @@ class RandomPolicy1DTrajectoryCollector:
 class JSONPatchEditDistance:
     """Edit distance calculator using JSON patch for serializable states."""
 
-    def compute_distance(self, state1: GameState, state2: GameState) -> int:
+    def __call__(self, state1: GameState, state2: GameState) -> int:
         """Compute distance using JSON patch operations."""
         json1 = self._to_json(state1)
         json2 = self._to_json(state2)
@@ -70,7 +70,7 @@ class JSONPatchEditDistance:
 class StructuralEditDistance:
     """Structural edit distance for complex states."""
 
-    def compute_distance(self, state1: Any, state2: Any) -> float:
+    def __call__(self, state1: Any, state2: Any) -> float:
         """Compute distance based on structural differences."""
         # Focus on semantically meaningful differences
         distance = 0
@@ -95,7 +95,7 @@ class TemporalDistractorGenerator:
     def __init__(self, gap: int = 50):
         self.gap = gap
 
-    def generate_distractors(
+    def __call__(
         self,
         transition: SymbolicTransition[SymbolicStateT],
         all_transitions: list[SymbolicTransition[SymbolicStateT]],
@@ -124,7 +124,7 @@ class Semantic1DDistractorGenerator:
             self._mutate_light_states,
         ]
 
-    def generate_distractors(
+    def __call__(
         self,
         transition: SymbolicTransition[GameState],
         all_transitions: list[SymbolicTransition[GameState]],

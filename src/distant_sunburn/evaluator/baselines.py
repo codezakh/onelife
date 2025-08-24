@@ -30,13 +30,13 @@ class TrueTransitionWorldModel(Generic[SymbolicStateT]):
         self, current_state: SymbolicStateT, action: Any
     ) -> SymbolicStateT:
         """Use the true transition function."""
-        return self.environment.transition(current_state, action)
+        return self.environment(current_state, action)
 
     def evaluate_log_probability(
         self, next_state: SymbolicStateT, current_state: SymbolicStateT, action: Any
     ) -> float:
         """Perfect model: probability 1 for correct transition, 0 otherwise."""
-        true_next = self.environment.transition(current_state, action)
+        true_next = self.environment(current_state, action)
         return 0.0 if self._states_equal(next_state, true_next) else -math.inf
 
     def _states_equal(self, state1: SymbolicStateT, state2: SymbolicStateT) -> bool:
