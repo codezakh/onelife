@@ -3,6 +3,8 @@ Maximum likelihood weight fitter for PoE-World experts.
 
 This module implements the core weight fitting logic using PyTorch optimization
 to learn expert weights that maximize the log-likelihood of observed transitions.
+
+The current implementation works specifically for the simple 1D environment.
 """
 
 import copy
