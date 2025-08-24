@@ -19,7 +19,6 @@ from .core import (
 )
 from .simple_1d_env.adapters import (
     Environment1DAdapter,
-    Environment1DWrapper,
 )
 from .simple_1d_env.components import (
     RandomPolicy1DTrajectoryCollector,
@@ -45,7 +44,6 @@ __all__ = [
     "Evaluator",
     # Environment adapters
     "Environment1DAdapter",
-    "Environment1DWrapper",
     # Component implementations
     "RandomPolicy1DTrajectoryCollector",
     "JSONPatchEditDistance",

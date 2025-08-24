@@ -217,3 +217,16 @@ def transition_function(state: GameState, action: Action, laws: list[Law]) -> Ga
 DEFAULT_MOVEMENT_LAW = MovementLaw()
 DEFAULT_LIGHT_LAW = LightLaw()
 DEFAULT_LAWS = [DEFAULT_MOVEMENT_LAW, DEFAULT_LIGHT_LAW]
+
+
+def default_transition_function(state: GameState, action: Action) -> GameState:
+    """Default transition function for the 1D environment.
+
+    Args:
+        state: Current game state
+        action: Action to apply
+
+    Returns:
+        New game state after applying the action
+    """
+    return transition_function(state, action, DEFAULT_LAWS)

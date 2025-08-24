@@ -21,23 +21,9 @@ from .components import (
 )
 from ...poe_world.benchmark_1d.environment import (
     GameState,
-    Action,
     WorldConfig,
-    transition_function,
-    DEFAULT_LAWS,
+    default_transition_function,
 )
-
-
-class Environment1DWrapper:
-    """Minimal environment wrapper - only transition function."""
-
-    def __init__(self, config: WorldConfig, seed: int):
-        self.config = config
-        self.base_seed = seed
-
-    def __call__(self, state: GameState, action: Action) -> GameState:
-        """Apply transition function with deterministic randomness."""
-        return transition_function(state, action, DEFAULT_LAWS)
 
 
 class Environment1DAdapter:
@@ -50,7 +36,7 @@ class Environment1DAdapter:
 
     def create_environment(self) -> SymbolicTransitionFunction[GameState]:
         """Create a 1D environment wrapper."""
-        return Environment1DWrapper(self.config, self.seed)
+        return default_transition_function
 
     def create_trajectory_collector(self) -> TrajectoryCollector[GameState]:
         """Create a random policy trajectory collector."""
