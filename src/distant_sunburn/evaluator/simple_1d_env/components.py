@@ -50,23 +50,27 @@ class RandomPolicy1DTrajectoryCollector:
         return transitions
 
 
-class JSONPatchEditDistance:
-    """Edit distance calculator using JSON patch for serializable states."""
+def _gamestate_to_json(state: GameState) -> dict:
+    """Convert a GameState object to JSON.
 
-    def __call__(self, state1: GameState, state2: GameState) -> int:
-        """Compute distance using JSON patch operations."""
-        json1 = self._to_json(state1)
-        json2 = self._to_json(state2)
-        patch = jsonpatch.make_patch(json1, json2)
-        return len(list(patch))
+    Normally, this would be handled by a serialization library such as
+    Pydantic or cattrs, but the game state is simple enough that we can do it manually here.
+    """
+    return {
+        "player": {"position": state.player.position},
+        "lights": [
+            {"position": light.position, "is_on": light.is_on} for light in state.lights
+        ],
+        # Exclude the RNG state, which is not easy to serialize.
+    }
 
-    def _to_json(self, state: GameState) -> dict:
-        """Convert state to JSON-serializable format."""
-        return {
-            "player_position": state.player.position,
-            "lights": [(light.position, light.is_on) for light in state.lights],
-            # Exclude non-serializable fields like RNG
-        }
+
+def json_patch_edit_distance(state1: GameState, state2: GameState) -> int:
+    """Compute the edit distance between two GameState objects using JSON patch."""
+    json1 = _gamestate_to_json(state1)
+    json2 = _gamestate_to_json(state2)
+    patch = jsonpatch.make_patch(json1, json2)
+    return len(list(patch))
 
 
 class Semantic1DDistractorGenerator:
