@@ -69,28 +69,6 @@ class JSONPatchEditDistance:
         }
 
 
-class StructuralEditDistance:
-    """Structural edit distance for complex states."""
-
-    def __call__(self, state1: Any, state2: Any) -> float:
-        """Compute distance based on structural differences."""
-        # Focus on semantically meaningful differences
-        distance = 0
-
-        # Player differences
-        if state1.player.position != state2.player.position:
-            distance += abs(state1.player.position - state2.player.position)
-
-        # Light state differences
-        for light1, light2 in zip(state1.lights, state2.lights):
-            if light1.position != light2.position:
-                distance += 1
-            if light1.is_on != light2.is_on:
-                distance += 1
-
-        return distance
-
-
 class TemporalDistractorGenerator:
     """Generate distractors from temporally distant transitions."""
 

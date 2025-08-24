@@ -24,7 +24,6 @@ from .simple_1d_env.adapters import (
 from .simple_1d_env.components import (
     RandomPolicy1DTrajectoryCollector,
     JSONPatchEditDistance,
-    StructuralEditDistance,
     TemporalDistractorGenerator,
     Semantic1DDistractorGenerator,
 )
@@ -51,7 +50,6 @@ __all__ = [
     # Component implementations
     "RandomPolicy1DTrajectoryCollector",
     "JSONPatchEditDistance",
-    "StructuralEditDistance",
     "TemporalDistractorGenerator",
     "Semantic1DDistractorGenerator",
     # Baseline world models
