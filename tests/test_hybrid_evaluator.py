@@ -28,7 +28,7 @@ def test_true_vs_null_world_model():
     """True transition function should vastly outperform null model."""
 
     config = WorldConfig(width=12, switch_point=6)
-    adapter = Environment1DAdapter(config=config, seed=42)
+    adapter = Environment1DAdapter(world_config=config, policy_seed=42)
     environment = adapter.create_environment()
 
     true_model = TrueTransitionWorldModel(
@@ -66,8 +66,8 @@ def test_edit_distance_calculation():
     """Test that edit distance calculation works."""
 
     # Create two different states
-    state1 = initial_state(seed=1)
-    state2 = initial_state(seed=2)
+    state1 = initial_state(WorldConfig(seed=1))
+    state2 = initial_state(WorldConfig(seed=2))
 
     calc = JSONPatchEditDistance()
 
@@ -88,8 +88,8 @@ def test_distractor_generation():
     generator = Semantic1DDistractorGenerator(config)
 
     # Create a sample transition
-    state1 = initial_state(seed=1)
-    state2 = initial_state(seed=2)
+    state1 = initial_state(WorldConfig(seed=1))
+    state2 = initial_state(WorldConfig(seed=2))
     transition = SymbolicTransition(state1, Action.MOVE_RIGHT, state2)
 
     # Generate distractors
@@ -101,29 +101,35 @@ def test_baseline_world_models():
     """Test that baseline world models work correctly."""
 
     config = WorldConfig(width=8, switch_point=4)
-    adapter = Environment1DAdapter(config=config, seed=42)
+    adapter = Environment1DAdapter(world_config=config, policy_seed=42)
     environment = adapter.create_environment()
 
     # Test true transition model
     true_model = TrueTransitionWorldModel(environment, equal_fn=lambda x, y: x == y)
-    state = environment(initial_state(seed=1), Action.MOVE_RIGHT)
+    state = environment(initial_state(WorldConfig(seed=1)), Action.MOVE_RIGHT)
 
     # Should predict the same as environment
-    pred_state = true_model.sample_next_state(initial_state(seed=1), Action.MOVE_RIGHT)
+    pred_state = true_model.sample_next_state(
+        initial_state(WorldConfig(seed=1)), Action.MOVE_RIGHT
+    )
     assert pred_state.player.position == state.player.position
 
     # Test null model
     null_model = NullWorldModel(equal_fn=lambda x, y: x == y)
-    null_pred = null_model.sample_next_state(initial_state(seed=1), Action.MOVE_RIGHT)
+    null_pred = null_model.sample_next_state(
+        initial_state(WorldConfig(seed=1)), Action.MOVE_RIGHT
+    )
     # Should predict no change
-    assert null_pred.player.position == initial_state(seed=1).player.position
+    assert (
+        null_pred.player.position == initial_state(WorldConfig(seed=1)).player.position
+    )
 
 
 def test_deterministic_evaluation():
     """Test that evaluation results are deterministic with same seed."""
 
     config = WorldConfig(width=8, switch_point=4)
-    adapter = Environment1DAdapter(config=config, seed=42)
+    adapter = Environment1DAdapter(world_config=config, policy_seed=42)
     environment = adapter.create_environment()
 
     true_model = TrueTransitionWorldModel(environment, equal_fn=lambda x, y: x == y)

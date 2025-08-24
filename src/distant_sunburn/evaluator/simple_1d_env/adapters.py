@@ -23,16 +23,18 @@ from ...poe_world.benchmark_1d.environment import (
     GameState,
     WorldConfig,
     default_transition_function,
+    initial_state,
 )
 
 
 class Environment1DAdapter:
     """Complete adapter for 1D benchmark environment."""
 
-    def __init__(self, config: WorldConfig, seed: int):
-        self.config = config
-        self.seed = seed
-        self.rng = random.Random(seed)
+    def __init__(self, world_config: WorldConfig, policy_seed: int = 42):
+        self.world_config = world_config
+        self.policy_seed = policy_seed
+        self.policy_rng = random.Random(policy_seed)
+        self.initial_state = initial_state(self.world_config)
 
     def create_environment(self) -> SymbolicTransitionFunction[GameState]:
         """Create a 1D environment wrapper."""
@@ -40,7 +42,7 @@ class Environment1DAdapter:
 
     def create_trajectory_collector(self) -> TrajectoryCollector[GameState]:
         """Create a random policy trajectory collector."""
-        return RandomPolicy1DTrajectoryCollector(self.rng)
+        return RandomPolicy1DTrajectoryCollector(self.policy_rng, self.initial_state)
 
     def create_edit_distance_calculator(self) -> EditDistanceCalculator[GameState]:
         """Create a JSON patch edit distance calculator."""
@@ -48,4 +50,4 @@ class Environment1DAdapter:
 
     def create_distractor_generator(self) -> DistractorGenerator[GameState]:
         """Create a semantic distractor generator."""
-        return Semantic1DDistractorGenerator(self.config)
+        return Semantic1DDistractorGenerator(self.world_config)

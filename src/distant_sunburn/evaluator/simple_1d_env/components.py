@@ -22,7 +22,6 @@ from ...poe_world.benchmark_1d.environment import (
     GameState,
     Action,
     WorldConfig,
-    initial_state,
 )
 
 SymbolicStateT = TypeVar("SymbolicStateT")
@@ -31,8 +30,9 @@ SymbolicStateT = TypeVar("SymbolicStateT")
 class RandomPolicy1DTrajectoryCollector:
     """Random policy trajectory collector for 1D environment."""
 
-    def __init__(self, rng: random.Random):
+    def __init__(self, rng: random.Random, initial_state: GameState):
         self.rng = rng
+        self.initial_state = initial_state
         self.actions = [Action.MOVE_LEFT, Action.MOVE_RIGHT, Action.STAY]
 
     def collect_transitions(
@@ -42,7 +42,7 @@ class RandomPolicy1DTrajectoryCollector:
     ) -> list[SymbolicTransition[GameState]]:
         """Collect transitions using random policy."""
         transitions = []
-        state = initial_state(seed=self.rng.randint(0, 2**31 - 1))
+        state = self.initial_state
 
         for _ in range(num_transitions):
             action = self.rng.choice(self.actions)
