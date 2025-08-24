@@ -7,13 +7,16 @@ protocols for different environments and use cases.
 
 import copy
 import random
-from typing import Any, TypeVar
+from typing import TypeVar
+from distant_sunburn.typing_utils import implements
 
 import jsonpatch
 
 from ..core import (
     SymbolicTransition,
     SymbolicTransitionFunction,
+    DistractorGenerator,
+    EditDistanceCalculator,
 )
 from ...poe_world.benchmark_1d.environment import (
     GameState,
@@ -50,27 +53,32 @@ class RandomPolicy1DTrajectoryCollector:
         return transitions
 
 
-def _gamestate_to_json(state: GameState) -> dict:
-    """Convert a GameState object to JSON.
+class JSONPatchEditDistance:
+    @staticmethod
+    def _gamestate_to_json(state: GameState) -> dict:
+        """Convert a GameState object to JSON.
 
-    Normally, this would be handled by a serialization library such as
-    Pydantic or cattrs, but the game state is simple enough that we can do it manually here.
-    """
-    return {
-        "player": {"position": state.player.position},
-        "lights": [
-            {"position": light.position, "is_on": light.is_on} for light in state.lights
-        ],
-        # Exclude the RNG state, which is not easy to serialize.
-    }
+        Normally, this would be handled by a serialization library such as
+        Pydantic or cattrs, but the game state is simple enough that we can do it manually here.
+        """
+        return {
+            "player": {"position": state.player.position},
+            "lights": [
+                {"position": light.position, "is_on": light.is_on}
+                for light in state.lights
+            ],
+            # Exclude the RNG state, which is not easy to serialize.
+        }
+
+    def __call__(self, state1: GameState, state2: GameState) -> int:
+        """Compute the edit distance between two GameState objects using JSON patch."""
+        json1 = self._gamestate_to_json(state1)
+        json2 = self._gamestate_to_json(state2)
+        patch = jsonpatch.make_patch(json1, json2)
+        return len(list(patch))
 
 
-def json_patch_edit_distance(state1: GameState, state2: GameState) -> int:
-    """Compute the edit distance between two GameState objects using JSON patch."""
-    json1 = _gamestate_to_json(state1)
-    json2 = _gamestate_to_json(state2)
-    patch = jsonpatch.make_patch(json1, json2)
-    return len(list(patch))
+implements(EditDistanceCalculator[GameState])(JSONPatchEditDistance)
 
 
 class Semantic1DDistractorGenerator:
@@ -116,3 +124,6 @@ class Semantic1DDistractorGenerator:
             if random.random() < 0.5:
                 light.is_on = not light.is_on
         return new_state
+
+
+implements(DistractorGenerator[GameState])(Semantic1DDistractorGenerator)

@@ -14,7 +14,7 @@ from distant_sunburn.evaluator import (
 )
 from distant_sunburn.evaluator.simple_1d_env.components import (
     Semantic1DDistractorGenerator,
-    json_patch_edit_distance,
+    JSONPatchEditDistance,
 )
 from distant_sunburn.evaluator.core import SymbolicTransition, EvaluationContext
 from distant_sunburn.poe_world.benchmark_1d.environment import (
@@ -69,13 +69,15 @@ def test_edit_distance_calculation():
     state1 = initial_state(seed=1)
     state2 = initial_state(seed=2)
 
+    calc = JSONPatchEditDistance()
+
     # Calculate distance
-    distance = json_patch_edit_distance(state1, state2)
+    distance = calc(state1, state2)
 
     assert distance >= 0
 
     # Distance to self should be 0
-    self_distance = json_patch_edit_distance(state1, state1)
+    self_distance = calc(state1, state1)
     assert self_distance == 0
 
 

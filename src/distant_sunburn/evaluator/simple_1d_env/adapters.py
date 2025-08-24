@@ -17,7 +17,7 @@ from ..core import (
 from .components import (
     RandomPolicy1DTrajectoryCollector,
     Semantic1DDistractorGenerator,
-    json_patch_edit_distance,
+    JSONPatchEditDistance,
 )
 from ...poe_world.benchmark_1d.environment import (
     GameState,
@@ -44,7 +44,7 @@ class Environment1DAdapter:
 
     def create_edit_distance_calculator(self) -> EditDistanceCalculator[GameState]:
         """Create a JSON patch edit distance calculator."""
-        return json_patch_edit_distance
+        return JSONPatchEditDistance()
 
     def create_distractor_generator(self) -> DistractorGenerator[GameState]:
         """Create a semantic distractor generator."""

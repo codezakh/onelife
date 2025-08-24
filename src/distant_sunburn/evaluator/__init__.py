@@ -23,7 +23,7 @@ from .simple_1d_env.adapters import (
 from .simple_1d_env.components import (
     RandomPolicy1DTrajectoryCollector,
     Semantic1DDistractorGenerator,
-    json_patch_edit_distance,
+    JSONPatchEditDistance,
 )
 from .baselines import (
     TrueTransitionWorldModel,
@@ -46,7 +46,7 @@ __all__ = [
     "Environment1DAdapter",
     # Component implementations
     "RandomPolicy1DTrajectoryCollector",
-    "json_patch_edit_distance",
+    "JSONPatchEditDistance",
     "Semantic1DDistractorGenerator",
     # Baseline world models
     "TrueTransitionWorldModel",

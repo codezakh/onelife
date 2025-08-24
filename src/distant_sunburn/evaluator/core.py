@@ -55,7 +55,7 @@ class EditDistanceCalculator(Protocol[SymbolicStateT_contra]):
 
     def __call__(
         self, state1: SymbolicStateT_contra, state2: SymbolicStateT_contra
-    ) -> int | float:
+    ) -> int:
         """Compute structured edit distance between two states"""
         ...
 
