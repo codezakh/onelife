@@ -35,10 +35,17 @@ from distant_sunburn.poe_world.simple_1d_env.world_model import PoEWorldModel
 from typing import Callable
 from loguru import logger
 from distant_sunburn.log_utils import change_log_level
+from distant_sunburn.evaluator import (
+    Evaluator,
+    EvaluationConfig,
+    TrueTransitionWorldModel,
+    NullWorldModel,
+)
+from distant_sunburn.evaluator.simple_1d_env.factory import OneDEvaluationFactory
 
 
 def generate_random_data(
-    n_transitions: int, seed: int = 42
+    world_config: WorldConfig, n_transitions: int, policy_seed: int = 42
 ) -> List[SymbolicTransition[GameState]]:
     """
     Generate random transitions using the 1D environment.
@@ -57,11 +64,11 @@ def generate_random_data(
             "INFO": [distant_sunburn.simple_1d_env.environment],
         }
     ):
-        rng = random.Random(seed)
-        np.random.seed(seed)
+        rng = random.Random(policy_seed)
+        np.random.seed(policy_seed)
 
         transitions = []
-        current_state = initial_state(WorldConfig(seed=seed))
+        current_state = initial_state(world_config)
 
         for _ in range(n_transitions):
             # Choose random action
@@ -83,5 +90,27 @@ def generate_random_data(
 
 
 def test():
-    assert len(generate_random_data(100, 42)) == 100
-    logger.info("Test passed")
+    world_config = WorldConfig()
+
+    # First we generate some data from a random policy and fit the world model.
+    transitions = generate_random_data(world_config, n_transitions=750, policy_seed=42)
+    fitter = MaxLikelihoodWeightFitter(
+        learning_rate=0.1, max_iterations=25, batch_size=200, l1_weight=0.001
+    )
+
+    weighted_experts = fitter.fit(ALL_EXPERTS, transitions)
+    learned_world_model = PoEWorldModel(weighted_experts)
+
+    # Now we create an evaluation factory for evaluating the world model.
+    evaluation_factory = OneDEvaluationFactory(
+        world_config=world_config, policy_seed=42
+    )
+    evaluation_context = evaluation_factory.create_context(
+        config=EvaluationConfig(num_distractors=3), num_transitions=50
+    )
+
+    evaluator = Evaluator(evaluation_context)
+    results = evaluator.evaluate(learned_world_model)
+
+    assert results.mean_generative_error < 0.1
+    assert results.discriminative_accuracy > 0.9
