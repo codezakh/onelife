@@ -1,49 +1,41 @@
 """
-Integration test for PoE-World inference machinery.
+Tests the following for a simple 1D environment:
 
-This test validates the complete inference pipeline:
-1. Generate random data using the 1D environment
-2. Split into training/testing sets
-3. Fit expert weights using maximum likelihood
-4. Validate that good experts get higher weights than bad experts
+1. We can learn a world model using PoE-World with data from a policy.
+2. That we can evaluate the world model using the evaluator.
+3. That the learned world model outperforms a null model, but not a perfect model.
 """
 
 import random
-import numpy as np
-import pytest
 from typing import List
 
-from distant_sunburn.poe_world.core import SymbolicTransition
-from distant_sunburn.simple_1d_env.environment import (
-    initial_state,
-    transition_function,
-    Action,
-    DEFAULT_LAWS,
-    GameState,
-    WorldConfig,
+import numpy as np
+
+import distant_sunburn.simple_1d_env.environment
+from distant_sunburn.evaluator import (
+    EvaluationConfig,
+    Evaluator,
+    NullWorldModel,
+    TrueTransitionWorldModel,
 )
+from distant_sunburn.evaluator.simple_1d_env.factory import OneDEvaluationFactory
+from distant_sunburn.log_utils import change_log_level
+from distant_sunburn.poe_world.core import SymbolicTransition
 from distant_sunburn.poe_world.simple_1d_env.handwritten_experts import (
-    CORRECT_EXPERTS,
-    INCORRECT_EXPERTS,
     ALL_EXPERTS,
 )
 from distant_sunburn.poe_world.simple_1d_env.weight_fitter import (
     MaxLikelihoodWeightFitter,
 )
 from distant_sunburn.poe_world.simple_1d_env.world_model import PoEWorldModel
-
-from typing import Callable
-from loguru import logger
-from distant_sunburn.log_utils import change_log_level
-from distant_sunburn.evaluator import (
-    Evaluator,
-    EvaluationConfig,
-    TrueTransitionWorldModel,
-    NullWorldModel,
+from distant_sunburn.simple_1d_env.environment import (
+    DEFAULT_LAWS,
+    Action,
+    GameState,
+    WorldConfig,
+    initial_state,
+    transition_function,
 )
-from distant_sunburn.evaluator.simple_1d_env.factory import OneDEvaluationFactory
-
-import distant_sunburn.simple_1d_env.environment
 
 
 def generate_random_data(
