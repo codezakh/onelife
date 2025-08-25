@@ -61,21 +61,6 @@ class RandomValues:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(values={self.values}, logscores={self.logscores})"
 
-    # def add_noise_to_full_domain(
-    #     self, all_possible_values: np.ndarray, noise_logScore: float = -10.0
-    # ) -> Self:
-    #     """
-    #     Expands this distribution to cover all possible values in the domain.
-    #     Values not in the current distribution get the noise_logScore.
-    #     This converts expert "opinions" into full probability distributions.
-    #     """
-    #     new_logscores = np.full_like(all_possible_values, noise_logScore, dtype=float)
-    #     for i, val in enumerate(self.values):
-    #         if val in all_possible_values:
-    #             idx = np.where(all_possible_values == val)[0][0]
-    #             new_logscores[idx] = self.logscores[i]
-    #     return RandomValues(values=all_possible_values, logscores=new_logscores)
-
 
 class ExpertFunction(Protocol[MetadataT]):
     """
@@ -131,7 +116,7 @@ class WorldModelProtocol(Protocol[MetadataT]):
 
     def sample_next_state(self, current_state: MetadataT, action: Any) -> MetadataT: ...
     def evaluate_log_probability(
-        self, transition: SymbolicTransition[MetadataT]
+        self, state: MetadataT, action: Any, next_state: MetadataT
     ) -> float: ...
     def with_new_experts(
         self, new_experts: list[WeightedExpert]

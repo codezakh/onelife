@@ -12,9 +12,9 @@ import torch.nn as nn
 import torch.optim as optim
 import random
 import copy
-from typing import List
+from typing import List, cast
 
-from distant_sunburn.poe_world.core import SymbolicTransition
+from distant_sunburn.poe_world.core import SymbolicTransition, RandomValues
 from distant_sunburn.simple_1d_env.environment import (
     GameState,
     Player,
@@ -78,12 +78,12 @@ class TestSingleTransitionLossComputation:
         # Test correct expert
         state_copy = copy.deepcopy(transition.prev_metadata)
         correct_movement_expert(state_copy, transition.action)
-        correct_prediction = state_copy.player.position.values[0]
+        correct_prediction = state_copy.player.position.values[0]  # type: ignore
 
         # Test incorrect expert
         state_copy = copy.deepcopy(transition.prev_metadata)
         incorrect_movement_expert_ignores_switch(state_copy, transition.action)
-        incorrect_prediction = state_copy.player.position.values[0]
+        incorrect_prediction = state_copy.player.position.values[0]  # type: ignore
 
         # Predictions should be different
         assert correct_prediction != incorrect_prediction
@@ -316,7 +316,7 @@ class TestDebuggingMethodology:
 
         # Even on perfect single transition, broken fitter fails
         weighted_experts = broken_fitter.fit(experts, [transition])
-        weights = [we.weight for we in weighted_experts]
+        weights = [we.weight for we in weighted_experts]  # type: ignore
 
         # This should fail (weights are equal when they shouldn't be)
         assert weights[0] == weights[1]  # Documents the bug
@@ -361,39 +361,3 @@ class TestDebuggingMethodology:
 
         # Optimization should succeed because loss computation is correct
         assert weighted_experts[0].weight > weighted_experts[1].weight
-
-
-if __name__ == "__main__":
-    # Run a simple test to verify the methodology works
-    transition = create_clear_transition()
-    print(f"Ground truth position: {transition.next_metadata.player.position}")
-
-    # Test expert predictions
-    state_copy = copy.deepcopy(transition.prev_metadata)
-    correct_movement_expert(state_copy, transition.action)
-    correct_pred = state_copy.player.position.values[0]
-
-    state_copy = copy.deepcopy(transition.prev_metadata)
-    incorrect_movement_expert_ignores_switch(state_copy, transition.action)
-    incorrect_pred = state_copy.player.position.values[0]
-
-    print(f"Correct expert predicts: {correct_pred}")
-    print(f"Incorrect expert predicts: {incorrect_pred}")
-
-    # Test weight fitting
-    fitter = MaxLikelihoodWeightFitter(max_iterations=10, l1_weight=0.0)
-    weighted_experts = fitter.fit(
-        [correct_movement_expert, incorrect_movement_expert_ignores_switch],
-        [transition],
-    )
-
-    print(f"Correct expert weight: {weighted_experts[0].weight:.4f}")
-    print(f"Incorrect expert weight: {weighted_experts[1].weight:.4f}")
-    print(
-        f"Weight ratio: {weighted_experts[0].weight / weighted_experts[1].weight:.2f}"
-    )
-
-    if weighted_experts[0].weight > weighted_experts[1].weight:
-        print("✅ SUCCESS: Single transition debugging works!")
-    else:
-        print("❌ FAILURE: Single transition debugging failed!")

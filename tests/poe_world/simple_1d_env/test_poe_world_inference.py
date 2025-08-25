@@ -162,7 +162,9 @@ def test_world_model_evaluation():
     # Evaluate log-probabilities on test set
     test_log_probs = []
     for transition in test_transitions:
-        log_prob = world_model.evaluate_log_probability(transition)
+        log_prob = world_model.evaluate_log_probability(
+            transition.prev_metadata, transition.action, transition.next_metadata
+        )
         test_log_probs.append(log_prob)
 
     # Basic sanity checks

@@ -92,7 +92,7 @@ class PoEWorldModel:
         return new_state
 
     def evaluate_log_probability(
-        self, transition: SymbolicTransition[GameState]
+        self, state: GameState, action: Action, next_state: GameState
     ) -> float:
         """
         Evaluate the log-probability of a transition under this model.
@@ -108,9 +108,7 @@ class PoEWorldModel:
             return 0.0
 
         # Get expert predictions
-        expert_predictions = self._get_expert_predictions(
-            transition.prev_metadata, transition.action
-        )
+        expert_predictions = self._get_expert_predictions(state, action)
 
         # Extract weights as tensor
         weights = torch.tensor(
@@ -118,7 +116,7 @@ class PoEWorldModel:
         )
 
         # Get observed values from next state
-        observed_values = self._get_observed_values(transition.next_metadata)
+        observed_values = self._get_observed_values(next_state)
 
         total_log_prob = 0.0
 
