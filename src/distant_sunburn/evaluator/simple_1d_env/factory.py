@@ -15,6 +15,7 @@ from ...simple_1d_env.environment import (
     WorldConfig,
     default_transition_function,
     initial_state,
+    Action,
 )
 
 
@@ -30,10 +31,12 @@ class OneDEvaluationFactory:
 
     def create_context(
         self, config: EvaluationConfig, num_transitions: int
-    ) -> EvaluationContext[GameState]:
+    ) -> EvaluationContext[GameState, Action]:
         """Creates a fully configured evaluation context."""
 
-        collector = RandomPolicy1DTrajectoryCollector(self.policy_rng, self.initial_state)
+        collector = RandomPolicy1DTrajectoryCollector(
+            self.policy_rng, self.initial_state
+        )
 
         test_transitions = collector.collect_transitions(
             self.environment, num_transitions

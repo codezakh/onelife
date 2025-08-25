@@ -10,6 +10,7 @@ from ..core import EvaluationContext, EvaluationConfig, SymbolicTransition
 from .components import JSONPatchEditDistance, CrafterDistractorGenerator
 from .scenarios import run_scenarios, CraftWoodenPickaxeScenario, CowMovementScenario
 from loguru import logger
+from crafter.constants import ActionT as CrafterAction
 
 
 class CrafterEvaluationFactory:
@@ -27,7 +28,7 @@ class CrafterEvaluationFactory:
 
     def create_context(
         self, config: EvaluationConfig, num_transitions_per_scenario: int
-    ) -> EvaluationContext[WorldState]:
+    ) -> EvaluationContext[WorldState, CrafterAction]:
 
         # 1. Define and run scenarios to collect trajectories
         scenarios = [
@@ -36,7 +37,7 @@ class CrafterEvaluationFactory:
         ]
         scenario_results = run_scenarios(scenarios)
 
-        test_transitions: list[SymbolicTransition[WorldState]] = []
+        test_transitions: list[SymbolicTransition[WorldState, CrafterAction]] = []
         for result in scenario_results:
             test_transitions.extend(result.transitions)
 
@@ -46,9 +47,9 @@ class CrafterEvaluationFactory:
         distractor_generator = CrafterDistractorGenerator(seed=self.policy_seed)
 
         # 3. Assemble the context
-        return EvaluationContext(
+        return EvaluationContext[WorldState, CrafterAction](
             config=config,
             test_transitions=test_transitions,
-            distractor_generator=distractor_generator,
+            distractor_generator=distractor_generator,  # type error here
             edit_distance_calculator=JSONPatchEditDistance(),
         )

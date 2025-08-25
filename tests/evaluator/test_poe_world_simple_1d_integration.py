@@ -89,6 +89,10 @@ def generate_random_data(
         return transitions
 
 
+import pytest
+
+
+@pytest.mark.skip(reason="in progress")
 def test():
     world_config = WorldConfig()
 

@@ -13,40 +13,46 @@ from icecream import ic
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 SymbolicStateT_contra = TypeVar("SymbolicStateT_contra", contravariant=True)
+ActionT_contra = TypeVar("ActionT_contra", contravariant=True)
+ActionT = TypeVar("ActionT")
+ActionT_co = TypeVar("ActionT_co", covariant=True)
 
 
-class EvaluatableWorldModel(Protocol[SymbolicStateT]):
+class EvaluatableWorldModel(Protocol[SymbolicStateT, ActionT_contra]):
     """Protocol for world models that can be evaluated."""
 
     def sample_next_state(
-        self, current_state: SymbolicStateT, action: Any
+        self, current_state: SymbolicStateT, action: ActionT_contra
     ) -> SymbolicStateT:
         """Generate single prediction by sampling from posterior P(s_next | s, a)"""
         ...
 
     def evaluate_log_probability(
-        self, next_state: SymbolicStateT, current_state: SymbolicStateT, action: Any
+        self,
+        next_state: SymbolicStateT,
+        current_state: SymbolicStateT,
+        action: ActionT_contra,
     ) -> float:
         """Compute log P(next_state | current_state, action)"""
         ...
 
 
-class SymbolicTransitionFunction(Protocol[SymbolicStateT]):
+class SymbolicTransitionFunction(Protocol[SymbolicStateT, ActionT_contra]):
     """Minimal protocol for symbolic environments."""
 
-    def __call__(self, state: SymbolicStateT, action: Any) -> SymbolicStateT:
+    def __call__(self, state: SymbolicStateT, action: ActionT_contra) -> SymbolicStateT:
         """True transition function: (s, a) -> s'"""
         ...
 
 
-class TrajectoryCollector(Protocol[SymbolicStateT]):
+class TrajectoryCollector(Protocol[SymbolicStateT, ActionT]):
     """Protocol for collecting symbolic transitions."""
 
     def collect_transitions(
         self,
-        transition_function: SymbolicTransitionFunction[SymbolicStateT],
+        transition_function: SymbolicTransitionFunction[SymbolicStateT, ActionT],
         num_transitions: int,
-    ) -> list["SymbolicTransition[SymbolicStateT]"]:
+    ) -> list["SymbolicTransition[SymbolicStateT, ActionT]"]:
         """Collect symbolic transitions using environment-specific policy"""
         ...
 
@@ -61,13 +67,13 @@ class EditDistanceCalculator(Protocol[SymbolicStateT_contra]):
         ...
 
 
-class DistractorGenerator(Protocol[SymbolicStateT]):
+class DistractorGenerator(Protocol[SymbolicStateT, ActionT]):
     """Protocol for generating plausible but incorrect next states."""
 
     def __call__(
         self,
-        transition: "SymbolicTransition[SymbolicStateT]",
-        all_transitions: list["SymbolicTransition[SymbolicStateT]"],
+        transition: "SymbolicTransition[SymbolicStateT, ActionT]",
+        all_transitions: list["SymbolicTransition[SymbolicStateT, ActionT]"],
         num_distractors: int,
     ) -> list[SymbolicStateT]:
         """Generate plausible but incorrect next states"""
@@ -75,11 +81,11 @@ class DistractorGenerator(Protocol[SymbolicStateT]):
 
 
 @dataclass(frozen=True)
-class SymbolicTransition(Generic[SymbolicStateT]):
+class SymbolicTransition(Generic[SymbolicStateT, ActionT_co]):
     """A single symbolic transition."""
 
     prev_metadata: SymbolicStateT
-    action: Any
+    action: ActionT_co
     next_metadata: SymbolicStateT
 
 
@@ -91,11 +97,11 @@ class EvaluationConfig:
 
 
 @dataclass
-class EvaluationContext(Generic[SymbolicStateT]):
+class EvaluationContext(Generic[SymbolicStateT, ActionT_contra]):
     """Dependencies for evaluation."""
 
-    test_transitions: list[SymbolicTransition[SymbolicStateT]]
-    distractor_generator: DistractorGenerator[SymbolicStateT]
+    test_transitions: list[SymbolicTransition[SymbolicStateT, ActionT_contra]]
+    distractor_generator: DistractorGenerator[SymbolicStateT, ActionT_contra]
     edit_distance_calculator: EditDistanceCalculator[SymbolicStateT]
     config: EvaluationConfig
 
@@ -110,17 +116,17 @@ class EvaluationResults:
     total_transitions_evaluated: int
 
 
-class Evaluator(Generic[SymbolicStateT]):
+class Evaluator(Generic[SymbolicStateT, ActionT]):
     """
     Measures the performance of a symbolic world model against a sequence of transitions collected offline.
     """
 
-    def __init__(self, context: EvaluationContext[SymbolicStateT]):
+    def __init__(self, context: EvaluationContext[SymbolicStateT, ActionT]):
         self.ctx = context
 
     def evaluate(
         self,
-        world_model: EvaluatableWorldModel[SymbolicStateT],
+        world_model: EvaluatableWorldModel[SymbolicStateT, ActionT],
     ) -> EvaluationResults:
 
         generative_errors: list[int | float] = []

@@ -1,10 +1,11 @@
 from crafter.state_export import WorldState
 import jsonpatch
 import random
-from typing import List
 
 from ..core import DistractorGenerator, SymbolicTransition
 from .mutators import Mutator, AddIllegalItemMutator, TeleportEntityToIllegalTileMutator
+from crafter.constants import ActionT as CrafterAction
+from ...typing_utils import implements
 
 
 # Note: This is almost a copy of the format_state function used to generate
@@ -56,7 +57,7 @@ class CrafterDistractorGenerator:
 
     def __init__(self, seed: int = 42):
         self.rng = random.Random(seed)
-        self.mutators: List[Mutator] = [
+        self.mutators: list[Mutator] = [
             AddIllegalItemMutator("wood", 1),
             AddIllegalItemMutator("stone", 1),
             AddIllegalItemMutator("iron_pickaxe", 1),
@@ -65,10 +66,10 @@ class CrafterDistractorGenerator:
 
     def __call__(
         self,
-        transition: SymbolicTransition[WorldState],
-        all_transitions: List[SymbolicTransition[WorldState]],
+        transition: SymbolicTransition[WorldState, CrafterAction],
+        all_transitions: list[SymbolicTransition[WorldState, CrafterAction]],
         num_distractors: int,
-    ) -> List[WorldState]:
+    ) -> list[WorldState]:
         """
         Generate distractors by applying mutators to the ground truth next state.
 
@@ -80,7 +81,7 @@ class CrafterDistractorGenerator:
         Returns:
             List of mutated states that are plausible but incorrect
         """
-        distractors = []
+        distractors: list[WorldState] = []
         max_attempts = num_distractors * 10  # Prevent infinite loops
         attempts = 0
 
@@ -105,3 +106,6 @@ class CrafterDistractorGenerator:
             attempts += 1
 
         return distractors
+
+
+implements(DistractorGenerator[WorldState, CrafterAction])(CrafterDistractorGenerator)

@@ -37,9 +37,9 @@ class RandomPolicy1DTrajectoryCollector:
 
     def collect_transitions(
         self,
-        transition_function: SymbolicTransitionFunction[GameState],
+        transition_function: SymbolicTransitionFunction[GameState, Action],
         num_transitions: int,
-    ) -> list[SymbolicTransition[GameState]]:
+    ) -> list[SymbolicTransition[GameState, Action]]:
         """Collect transitions using random policy."""
         transitions = []
         state = self.initial_state
@@ -93,8 +93,8 @@ class Semantic1DDistractorGenerator:
 
     def __call__(
         self,
-        transition: SymbolicTransition[GameState],
-        all_transitions: list[SymbolicTransition[GameState]],
+        transition: SymbolicTransition[GameState, Action],
+        all_transitions: list[SymbolicTransition[GameState, Action]],
         num_distractors: int,
     ) -> list[GameState]:
         """Generate distractors using semantic mutations."""
@@ -126,4 +126,4 @@ class Semantic1DDistractorGenerator:
         return new_state
 
 
-implements(DistractorGenerator[GameState])(Semantic1DDistractorGenerator)
+implements(DistractorGenerator[GameState, Action])(Semantic1DDistractorGenerator)

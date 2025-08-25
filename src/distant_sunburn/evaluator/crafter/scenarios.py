@@ -28,6 +28,7 @@ from .utils import MAP_ACTION_TO_INDEX
 import random
 import functools
 from typing import Sequence
+from crafter.constants import ActionT as CrafterAction
 
 
 @dataclass
@@ -40,7 +41,7 @@ class GoalChecked:
 
 
 def _check_steps_taken(
-    transitions: list[SymbolicTransition[WorldState]], max_steps: int
+    transitions: list[SymbolicTransition[WorldState, CrafterAction]], max_steps: int
 ) -> GoalChecked:
     if transitions[-1].next_metadata.step_count >= max_steps:
         return GoalChecked(
@@ -71,7 +72,7 @@ class Scenario(Protocol):
         ...
 
     def goal_test(
-        self, transitions: list[SymbolicTransition[WorldState]]
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
     ) -> GoalChecked:
         """Returns True if the scenario has been achieved."""
         ...
@@ -91,7 +92,7 @@ def require_max_steps(goal_test_method: T) -> T:
 
     @functools.wraps(goal_test_method)
     def wrapper(
-        self: Scenario, transitions: list[SymbolicTransition[WorldState]]
+        self: Scenario, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
     ) -> GoalChecked:
         # Check if we've reached max_steps
         if not (target_steps_goal := _check_steps_taken(transitions, self.max_steps)):
@@ -106,7 +107,7 @@ def require_max_steps(goal_test_method: T) -> T:
 @dataclass
 class ScenarioRunResult:
     scenario: Scenario
-    transitions: list[SymbolicTransition[WorldState]]
+    transitions: list[SymbolicTransition[WorldState, CrafterAction]]
     goal_test: GoalChecked
     run_for_steps: int
 
@@ -116,7 +117,7 @@ def run_scenarios(scenarios: Sequence[Scenario]) -> list[ScenarioRunResult]:
 
     for scenario in scenarios:
         state = scenario.get_initial_state()
-        transitions: list[SymbolicTransition[WorldState]] = []
+        transitions: list[SymbolicTransition[WorldState, CrafterAction]] = []
         # In order to satisfy the type checker that goal_test and step are bound,
         # we will initialize them here and then re-assign them in the loop.
         goal_test = GoalChecked(False, "Scenario not started")
@@ -170,7 +171,7 @@ class CraftWoodenPickaxeScenario:
         return "make_wood_pickaxe"
 
     def goal_test(
-        self, transitions: list[SymbolicTransition[WorldState]]
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
     ) -> GoalChecked:
         if transitions[0].prev_metadata.player.inventory.wood_pickaxe != 0:
             return GoalChecked(
@@ -240,7 +241,7 @@ class CowMovementScenario:
 
     @require_max_steps
     def goal_test(
-        self, transitions: list[SymbolicTransition[WorldState]]
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
     ) -> GoalChecked:
         # Check if the cow has moved from its iniital position.
         cows = find_all_objects_for_type(
@@ -312,7 +313,7 @@ class RandomMovementScenario:
 
     @require_max_steps
     def goal_test(
-        self, transitions: list[SymbolicTransition[WorldState]]
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
     ) -> GoalChecked:
         # Check if the player has moved from the initial position
         if not transitions:
