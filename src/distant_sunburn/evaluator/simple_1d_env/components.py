@@ -61,10 +61,12 @@ class JSONPatchEditDistance:
         Normally, this would be handled by a serialization library such as
         Pydantic or cattrs, but the game state is simple enough that we can do it manually here.
         """
+        # Note: we convert to int and bool here to avoid issues with JSON serialization
+        # of NumPy dtypes like int64.
         return {
-            "player": {"position": state.player.position},
+            "player": {"position": int(state.player.position)},
             "lights": [
-                {"position": light.position, "is_on": light.is_on}
+                {"position": int(light.position), "is_on": bool(light.is_on)}
                 for light in state.lights
             ],
             # Exclude the RNG state, which is not easy to serialize.

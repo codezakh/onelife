@@ -29,9 +29,9 @@ class EvaluatableWorldModel(Protocol[SymbolicStateT, ActionT_contra]):
 
     def evaluate_log_probability(
         self,
-        next_state: SymbolicStateT,
-        current_state: SymbolicStateT,
+        state: SymbolicStateT,
         action: ActionT_contra,
+        next_state: SymbolicStateT,
     ) -> float:
         """Compute log P(next_state | current_state, action)"""
         ...
@@ -157,7 +157,9 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             log_probs: list[float] = []
             for candidate in candidates:
                 log_prob = world_model.evaluate_log_probability(
-                    candidate, transition.prev_metadata, transition.action
+                    state=transition.prev_metadata,
+                    action=transition.action,
+                    next_state=candidate,
                 )
                 log_probs.append(log_prob)
 

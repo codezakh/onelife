@@ -10,7 +10,8 @@ import math
 from typing import Any, Generic, TypeVar, Callable
 import random
 
-from .core import SymbolicTransitionFunction
+from .core import SymbolicTransitionFunction, EvaluatableWorldModel
+from ..typing_utils import implements
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 ActionT = TypeVar("ActionT")
@@ -34,15 +35,18 @@ class TrueTransitionWorldModel(Generic[SymbolicStateT, ActionT]):
         return self.environment(current_state, action)
 
     def evaluate_log_probability(
-        self, next_state: SymbolicStateT, current_state: SymbolicStateT, action: ActionT
+        self, state: SymbolicStateT, action: ActionT, next_state: SymbolicStateT
     ) -> float:
         """Perfect model: probability 1 for correct transition, 0 otherwise."""
-        true_next = self.environment(current_state, action)
+        true_next = self.environment(state, action)
         return 0.0 if self._states_equal(next_state, true_next) else -math.inf
 
     def _states_equal(self, state1: SymbolicStateT, state2: SymbolicStateT) -> bool:
         """Check if two states are equal."""
         return self.equal_fn(state1, state2)
+
+
+implements(EvaluatableWorldModel)(TrueTransitionWorldModel)
 
 
 class NullWorldModel(Generic[SymbolicStateT, ActionT]):
@@ -58,10 +62,10 @@ class NullWorldModel(Generic[SymbolicStateT, ActionT]):
         return copy.deepcopy(current_state)
 
     def evaluate_log_probability(
-        self, next_state: SymbolicStateT, current_state: SymbolicStateT, action: ActionT
+        self, state: SymbolicStateT, action: ActionT, next_state: SymbolicStateT
     ) -> float:
         """Give high probability to no change, low to changes."""
-        if self._states_equal(next_state, current_state):
+        if self._states_equal(next_state, state):
             return 0.0  # High probability for no change
         else:
             return -5.0  # Low but not impossible probability for changes
@@ -69,6 +73,9 @@ class NullWorldModel(Generic[SymbolicStateT, ActionT]):
     def _states_equal(self, state1: SymbolicStateT, state2: SymbolicStateT) -> bool:
         """Check if two states are equal."""
         return self.equal_fn(state1, state2)
+
+
+implements(EvaluatableWorldModel)(NullWorldModel)
 
 
 class RandomWorldModel(Generic[SymbolicStateT, ActionT]):
@@ -86,7 +93,10 @@ class RandomWorldModel(Generic[SymbolicStateT, ActionT]):
         return copy.deepcopy(current_state)  # Placeholder
 
     def evaluate_log_probability(
-        self, next_state: SymbolicStateT, current_state: SymbolicStateT, action: ActionT
+        self, state: SymbolicStateT, action: ActionT, next_state: SymbolicStateT
     ) -> float:
         """Return random log probability."""
         return self.rng.uniform(-10.0, 0.0)
+
+
+implements(EvaluatableWorldModel)(RandomWorldModel)
