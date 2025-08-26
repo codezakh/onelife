@@ -1,16 +1,14 @@
+from typing import Any, Dict
+
+import numpy as np
+import torch
+
 from distant_sunburn.poe_world.core import RandomValues
 from distant_sunburn.poe_world.weight_fitter import (
     combine_expert_predictions,
     expand_to_full_domain,
 )
 from distant_sunburn.simple_1d_env.environment import GameState
-
-
-import numpy as np
-import torch
-
-
-from typing import Any, Dict
 
 
 class ObservableExtractor:

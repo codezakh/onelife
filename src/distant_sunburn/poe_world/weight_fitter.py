@@ -8,33 +8,23 @@ The current implementation works specifically for the simple 1D environment.
 """
 
 import copy
-from typing import Generic
+from typing import Any, Dict, Generic, Tuple, TypeVar
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import Any, Dict, Tuple
 from loguru import logger
 
-
+from ..typing_utils import implements
 from .core import (
-    RandomValues,
     ExpertFunction,
-    WeightedExpert,
+    ObservableExtractorProtocol,
+    RandomValues,
     SymbolicTransition,
+    WeightedExpert,
     WeightFitterProtocol,
 )
-from ..typing_utils import implements
-from .core import ObservableExtractorProtocol
-
-
-from typing import NewType, Union, TypeAlias, TypeVar
-
-ObservableId = NewType("ObservableId", str)
-
-PrimitiveT: TypeAlias = Union[bool, int, float]
-
-ObservableT = Union[PrimitiveT, RandomValues]
 
 
 def expand_to_full_domain(
@@ -189,10 +179,6 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
         self.l1_weight = l1_weight
         self.weight_bounds = weight_bounds
 
-        # Define domain for the 1D environment
-        # self.position_domain = np.arange(0, 12)  # [0, 1, 2, ..., 11]
-        # self.bool_domain = np.array([0, 1])  # [False, True]
-
         self.observable_extractor = observable_extractor
 
     def fit(
@@ -303,43 +289,6 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
 
         return all_predictions
 
-    # def _extract_attribute_predictions(self, state: GameState) -> Dict[str, Any]:
-    #     """
-    #     Extract RandomValues predictions from a state after expert execution.
-
-    #     Returns:
-    #         Dictionary mapping attribute names to their domains and predictions
-    #     """
-    #     predictions = {}
-
-    #     # Extract player position
-    #     if isinstance(state.player.position, RandomValues):
-    #         predictions["player_position"] = expand_to_full_domain(
-    #             state.player.position, self.position_domain
-    #         )
-    #     else:
-    #         # Expert didn't modify this attribute - create uniform distribution
-    #         predictions["player_position"] = RandomValues(
-    #             values=self.position_domain,
-    #             logscores=np.zeros(len(self.position_domain), dtype=np.float32),
-    #         )
-
-    #     # Extract light states
-    #     for i, light in enumerate(state.lights):
-    #         attr_name = f"light_{i}_is_on"
-    #         if isinstance(light.is_on, RandomValues):
-    #             predictions[attr_name] = expand_to_full_domain(
-    #                 light.is_on, self.bool_domain
-    #             )
-    #         else:
-    #             # Expert didn't modify this attribute - create uniform distribution
-    #             predictions[attr_name] = RandomValues(
-    #                 values=self.bool_domain,
-    #                 logscores=np.zeros(len(self.bool_domain), dtype=np.float32),
-    #             )
-
-    #     return predictions
-
     def _compute_loss(
         self,
         weights: torch.Tensor,
@@ -385,19 +334,6 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
                 total_loss -= log_prob
 
         return total_loss
-
-    # def _get_observed_values(self, state: GameState) -> Dict[str, int]:
-    #     """Extract ground truth observed values from a state."""
-    #     observed = {}
-
-    #     # Player position
-    #     observed["player_position"] = state.player.position
-
-    #     # Light states
-    #     for i, light in enumerate(state.lights):
-    #         observed[f"light_{i}_is_on"] = int(light.is_on)
-
-    #     return observed
 
 
 implements(WeightFitterProtocol)(MaxLikelihoodWeightFitter)
