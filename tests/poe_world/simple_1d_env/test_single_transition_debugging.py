@@ -26,7 +26,7 @@ from distant_sunburn.poe_world.simple_1d_env.handwritten_experts import (
     correct_movement_expert,
     incorrect_movement_expert_ignores_switch,
 )
-from distant_sunburn.poe_world.simple_1d_env.weight_fitter import (
+from distant_sunburn.poe_world.weight_fitter import (
     MaxLikelihoodWeightFitter,
     combine_expert_predictions_torch,
     evaluate_log_probability_torch,

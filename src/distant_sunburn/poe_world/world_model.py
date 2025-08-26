@@ -18,7 +18,7 @@ from .core import (
     WorldModelProtocol,
 )
 from ..simple_1d_env.environment import GameState, Action
-from .simple_1d_env.weight_fitter import (
+from .weight_fitter import (
     expand_to_full_domain,
     combine_expert_predictions,
     ObservableExtractor,

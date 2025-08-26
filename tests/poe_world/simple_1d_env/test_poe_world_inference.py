@@ -27,11 +27,11 @@ from distant_sunburn.poe_world.simple_1d_env.handwritten_experts import (
     INCORRECT_EXPERTS,
     ALL_EXPERTS,
 )
-from distant_sunburn.poe_world.simple_1d_env.weight_fitter import (
+from distant_sunburn.poe_world.weight_fitter import (
     MaxLikelihoodWeightFitter,
 )
 from distant_sunburn.poe_world.world_model import PoEWorldModel
-from distant_sunburn.poe_world.simple_1d_env.weight_fitter import ObservableExtractor
+from distant_sunburn.poe_world.weight_fitter import ObservableExtractor
 
 
 def generate_random_data(

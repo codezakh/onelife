@@ -15,15 +15,15 @@ import torch.optim as optim
 from typing import Any, Dict, Tuple
 from loguru import logger
 
-from ..core import (
+from .core import (
     RandomValues,
     ExpertFunction,
     WeightedExpert,
     SymbolicTransition,
     WeightFitterProtocol,
 )
-from ...simple_1d_env.environment import GameState
-from ...typing_utils import implements
+from ..simple_1d_env.environment import GameState
+from ..typing_utils import implements
 
 
 from typing import NewType, Union, TypeAlias

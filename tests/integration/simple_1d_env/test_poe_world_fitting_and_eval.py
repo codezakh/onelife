@@ -24,7 +24,7 @@ from distant_sunburn.poe_world.core import SymbolicTransition
 from distant_sunburn.poe_world.simple_1d_env.handwritten_experts import (
     ALL_EXPERTS,
 )
-from distant_sunburn.poe_world.simple_1d_env.weight_fitter import (
+from distant_sunburn.poe_world.weight_fitter import (
     MaxLikelihoodWeightFitter,
 )
 from distant_sunburn.poe_world.world_model import PoEWorldModel
@@ -36,7 +36,7 @@ from distant_sunburn.simple_1d_env.environment import (
     initial_state,
     transition_function,
 )
-from distant_sunburn.poe_world.simple_1d_env.weight_fitter import ObservableExtractor
+from distant_sunburn.poe_world.weight_fitter import ObservableExtractor
 
 
 def generate_random_data(
