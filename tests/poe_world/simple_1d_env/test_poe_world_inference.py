@@ -31,6 +31,7 @@ from distant_sunburn.poe_world.simple_1d_env.weight_fitter import (
     MaxLikelihoodWeightFitter,
 )
 from distant_sunburn.poe_world.simple_1d_env.world_model import PoEWorldModel
+from distant_sunburn.poe_world.simple_1d_env.weight_fitter import ObservableExtractor
 
 
 def generate_random_data(
@@ -157,7 +158,9 @@ def test_world_model_evaluation():
     weighted_experts = fitter.fit(ALL_EXPERTS, train_transitions)
 
     # Create world model
-    world_model = PoEWorldModel(weighted_experts)
+    world_model = PoEWorldModel(
+        observable_extractor=ObservableExtractor(), weighted_experts=weighted_experts
+    )
 
     # Evaluate log-probabilities on test set
     test_log_probs = []
@@ -189,7 +192,9 @@ def test_world_model_sampling():
     transitions = generate_random_data(200, seed=456)
 
     weighted_experts = fitter.fit(CORRECT_EXPERTS, transitions)
-    world_model = PoEWorldModel(weighted_experts)
+    world_model = PoEWorldModel(
+        observable_extractor=ObservableExtractor(), weighted_experts=weighted_experts
+    )
 
     # Sample from the initial state
     initial = initial_state(WorldConfig(seed=789))

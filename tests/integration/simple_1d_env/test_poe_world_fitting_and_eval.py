@@ -36,6 +36,7 @@ from distant_sunburn.simple_1d_env.environment import (
     initial_state,
     transition_function,
 )
+from distant_sunburn.poe_world.simple_1d_env.weight_fitter import ObservableExtractor
 
 
 def generate_random_data(
@@ -95,7 +96,10 @@ def test():
         )
 
         weighted_experts = fitter.fit(ALL_EXPERTS, transitions)
-        learned_world_model = PoEWorldModel(weighted_experts)
+        learned_world_model = PoEWorldModel(
+            observable_extractor=ObservableExtractor(),
+            weighted_experts=weighted_experts,
+        )
 
         # Now we create an evaluation factory for evaluating the world model.
         evaluation_factory = OneDEvaluationFactory(

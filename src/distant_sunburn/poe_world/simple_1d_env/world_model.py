@@ -24,9 +24,30 @@ from .weight_fitter import (
     ObservableExtractor,
 )
 from ...typing_utils import implements
+from typing import TypeVar, Generic
+from typing import Protocol, Any
 
 
-class PoEWorldModel:
+SymbolicStateT = TypeVar("SymbolicStateT")
+ActionT = TypeVar("ActionT")
+
+
+class ObservableExtractorProtocol(Protocol[SymbolicStateT]):
+    def extract_attribute_predictions(
+        self, state: SymbolicStateT
+    ) -> Dict[str, Any]: ...
+
+    def get_observed_values(self, state: SymbolicStateT) -> Dict[str, Any]: ...
+
+    def apply_expert_predictions(
+        self,
+        new_state: SymbolicStateT,
+        expert_predictions: Dict[str, Any],
+        weights: torch.Tensor,
+    ) -> SymbolicStateT: ...
+
+
+class PoEWorldModel(Generic[SymbolicStateT, ActionT]):
     """
     Product of Experts World Model for the 1D benchmark environment.
 
@@ -35,14 +56,18 @@ class PoEWorldModel:
     in the PRD and supplementary material.
     """
 
-    def __init__(self, weighted_experts: list[WeightedExpert] | None = None):
+    def __init__(
+        self,
+        observable_extractor: ObservableExtractorProtocol[SymbolicStateT],
+        weighted_experts: list[WeightedExpert] | None = None,
+    ):
         self._experts = weighted_experts or []
 
         # Define domain for the 1D environment
         # self.position_domain = np.arange(0, 12)  # [0, 1, 2, ..., 11]
         # self.bool_domain = np.array([0, 1])  # [False, True]
 
-        self.observable_extractor = ObservableExtractor()
+        self.observable_extractor = observable_extractor
 
         logger.debug(f"Initialized PoEWorldModel with {len(self._experts)} experts")
 
@@ -51,11 +76,17 @@ class PoEWorldModel:
         """Get the list of weighted experts."""
         return self._experts
 
-    def with_new_experts(self, new_experts: list[WeightedExpert]) -> "PoEWorldModel":
+    def with_new_experts(
+        self, new_experts: list[WeightedExpert]
+    ) -> "PoEWorldModel[SymbolicStateT, ActionT]":
         """Create a new world model with the given experts."""
-        return PoEWorldModel(weighted_experts=new_experts)
+        return PoEWorldModel(
+            weighted_experts=new_experts, observable_extractor=self.observable_extractor
+        )
 
-    def sample_next_state(self, current_state: GameState, action: Action) -> GameState:
+    def sample_next_state(
+        self, current_state: SymbolicStateT, action: ActionT
+    ) -> SymbolicStateT:
         """
         Sample a next state using the weighted experts.
 
@@ -102,7 +133,7 @@ class PoEWorldModel:
         return new_state
 
     def evaluate_log_probability(
-        self, state: GameState, action: Action, next_state: GameState
+        self, state: SymbolicStateT, action: ActionT, next_state: SymbolicStateT
     ) -> float:
         """
         Evaluate the log-probability of a transition under this model.
@@ -141,7 +172,7 @@ class PoEWorldModel:
         return total_log_prob
 
     def _get_expert_predictions(
-        self, state: GameState, action: Action
+        self, state: SymbolicStateT, action: ActionT
     ) -> Dict[str, list[RandomValues]]:
         """
         Get predictions from all experts for the given state and action.
