@@ -13,9 +13,8 @@ between good and bad models.
 import numpy as np
 from typing import Any
 
-from ..core import RandomValues, ExpertFunction
+from ..core import RandomValues
 from ...simple_1d_env.environment import GameState, Action
-from ...typing_utils import implements
 
 
 def correct_movement_expert(
