@@ -4,7 +4,7 @@ import torch
 from distant_sunburn.poe_world.core import DiscreteDistribution
 from distant_sunburn.poe_world.weight_fitter import (
     combine_expert_predictions_for_attr,
-    expand_to_full_domain,
+    # expand_to_full_domain,
 )
 from distant_sunburn.simple_1d_env.environment import GameState
 from ..core import ObservableId, ObservableExtractorProtocol
@@ -29,8 +29,8 @@ class ObservableExtractor:
 
         # Extract player position
         if isinstance(state.player.position, DiscreteDistribution):
-            predictions["player_position"] = expand_to_full_domain(
-                state.player.position, self.position_domain
+            predictions["player_position"] = state.player.position.expand_support(
+                self.position_domain
             )
         else:
             # Expert didn't modify this attribute - create uniform distribution
@@ -42,9 +42,7 @@ class ObservableExtractor:
         for i, light in enumerate(state.lights):
             attr_name = f"light_{i}_is_on"
             if isinstance(light.is_on, DiscreteDistribution):
-                predictions[attr_name] = expand_to_full_domain(
-                    light.is_on, self.bool_domain
-                )
+                predictions[attr_name] = light.is_on.expand_support(self.bool_domain)
             else:
                 # Expert didn't modify this attribute - create uniform distribution
                 predictions[attr_name] = DiscreteDistribution.from_uniform(

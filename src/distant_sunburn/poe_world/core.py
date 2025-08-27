@@ -57,6 +57,30 @@ class DiscreteDistribution:
     def from_uniform(cls, support: npt.NDArray[np.int32]) -> "DiscreteDistribution":
         return cls(support=support, logscores=np.zeros_like(support, dtype=np.float32))
 
+    def expand_support(
+        self, new_support: npt.NDArray[np.int32], noise_logscore: float = -10.0
+    ) -> "DiscreteDistribution":
+        """
+        Expands the support of the distribution to include all values in the new support.
+
+        The logscores for the new values are set to the noise_logscore.
+        Expert functions often only predict a subset of possible values for an attribute
+        (e.g., putting all probability on a single value by specifying a single value with
+        a logscore of 0.0).
+        This function expands such partial distributions to cover the full domain by
+        assigning a low probability (noise_logscore) to values the expert didn't predict.
+
+        This is necessary for proper combination of expert predictions, as all experts
+        must have distributions over the same set of possible values to be combined
+        via weighted averaging.
+        """
+        new_logscores = np.full_like(new_support, noise_logscore, dtype=np.float32)
+        for i, val in enumerate(self.support):
+            if val in new_support:
+                idx = np.where(new_support == val)[0][0]
+                new_logscores[idx] = self.logscores[i]
+        return DiscreteDistribution(support=new_support, logscores=new_logscores)
+
     def sample(self) -> int:
         """Samples a value from the distribution."""
         probabilities = np.exp(self.logscores - logsumexp(self.logscores))
