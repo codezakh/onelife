@@ -1,3 +1,24 @@
+"""
+PoE-World was originally designed for 2D physics-based environments that are
+object-centric, like Atari Pong or 2D platformers like Montezuma's Revenge.
+
+The "state" in these environments is a list of objects with commmon attributes
+like position, velocity, etc.
+
+In Crafter, the state is much more complex, and hierarchical. Since our aim is
+to evaluate the ability of a more generic approach to learn about the world, we
+want to avoid hardcoding domain knowledge about the world, such as how to extract
+interesting observables from the state and so on.
+
+So, we will stick to the original design of PoE-World, and define an extractor which
+operates on objects in the world state that are similar to the objects in the original
+environments.
+
+This corresponds to the player's position, health, and the position and health of nearby
+game entities. Like in PoE-World for physics-based environments, we will ignore static
+objects like tiles of the game world or crafting stations.
+"""
+
 from ...typing_utils import implements
 from crafter.state_export import WorldState
 from ..core import ObservableExtractorProtocol, ObservableId, DiscreteDistribution
