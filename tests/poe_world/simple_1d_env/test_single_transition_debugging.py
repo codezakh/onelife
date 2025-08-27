@@ -13,6 +13,7 @@ import torch.optim as optim
 import random
 import copy
 from typing import List, cast
+from distant_sunburn.poe_world.core import ObservableId
 
 from distant_sunburn.poe_world.core import SymbolicTransition, RandomValues
 from distant_sunburn.simple_1d_env.environment import (
@@ -31,7 +32,9 @@ from distant_sunburn.poe_world.weight_fitter import (
     combine_expert_predictions_torch,
     evaluate_log_probability_torch,
 )
-from distant_sunburn.poe_world.simple_1d_env.observable_extractor import ObservableExtractor
+from distant_sunburn.poe_world.simple_1d_env.observable_extractor import (
+    ObservableExtractor,
+)
 
 
 def create_clear_transition() -> SymbolicTransition[GameState]:
@@ -167,7 +170,9 @@ class TestSingleTransitionLossComputation:
         )
 
         # Get expert predictions for player position
-        attr_predictions = [pred["player_position"] for pred in expert_predictions[0]]
+        attr_predictions = [
+            pred[ObservableId("player_position")] for pred in expert_predictions[0]
+        ]
 
         # Test gradient flow through combination function
         weights = torch.tensor([0.7, 0.3], dtype=torch.float32, requires_grad=True)

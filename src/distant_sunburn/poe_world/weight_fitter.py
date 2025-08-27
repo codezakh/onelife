@@ -8,7 +8,7 @@ The current implementation works specifically for the simple 1D environment.
 """
 
 import copy
-from typing import Any, Dict, Generic, Tuple, TypeVar
+from typing import Generic, Tuple, TypeVar
 
 import numpy as np
 import torch
@@ -24,6 +24,7 @@ from .core import (
     SymbolicTransition,
     WeightedExpert,
     WeightFitterProtocol,
+    ObservableId,
 )
 
 
@@ -262,17 +263,17 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
         self,
         experts: list[ExpertFunction[SymbolicStateT]],
         transitions: list[SymbolicTransition[SymbolicStateT]],
-    ) -> list[list[Dict[str, Any]]]:
+    ) -> list[list[dict[ObservableId, RandomValues]]]:
         """
         Precompute expert predictions for all transitions to avoid repeated execution.
 
         Returns:
             List of expert predictions [n_transitions][n_experts][attribute_name]
         """
-        all_predictions = []
+        all_predictions: list[list[dict[ObservableId, RandomValues]]] = []
 
         for transition in transitions:
-            transition_predictions = []
+            transition_predictions: list[dict[ObservableId, RandomValues]] = []
 
             for expert in experts:
                 # Deep copy state and run expert
@@ -293,7 +294,7 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
         self,
         weights: torch.Tensor,
         transitions: list[SymbolicTransition[SymbolicStateT]],
-        expert_predictions: list[list[Dict[str, Any]]],
+        expert_predictions: list[list[dict[ObservableId, RandomValues]]],
     ) -> torch.Tensor:
         """
         Compute the negative log-likelihood loss for the given weights.

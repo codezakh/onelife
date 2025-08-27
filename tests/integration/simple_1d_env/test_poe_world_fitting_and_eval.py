@@ -36,7 +36,9 @@ from distant_sunburn.simple_1d_env.environment import (
     initial_state,
     transition_function,
 )
-from distant_sunburn.poe_world.simple_1d_env.observable_extractor import ObservableExtractor
+from distant_sunburn.poe_world.simple_1d_env.observable_extractor import (
+    ObservableExtractor,
+)
 
 
 def generate_random_data(
