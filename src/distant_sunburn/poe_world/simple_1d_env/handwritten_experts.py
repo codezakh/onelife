@@ -61,7 +61,7 @@ def correct_movement_expert(
     new_position = max(0, min(new_position, current_state.config.width - 1))
 
     # Assign the prediction using RandomValues
-    current_state.player.position = DiscreteDistribution(support=np.array([new_position]))  # type: ignore
+    current_state.player.position = DiscreteDistribution(support=[new_position])  # type: ignore
 
 
 def correct_light_expert(
@@ -90,7 +90,7 @@ def correct_light_expert(
             new_state = light.is_on
 
         # Assign the prediction using RandomValues
-        light.is_on = DiscreteDistribution(support=np.array([new_state]))  # type: ignore
+        light.is_on = DiscreteDistribution(support=[new_state])  # type: ignore
 
 
 def incorrect_movement_expert_ignores_switch(
@@ -132,7 +132,7 @@ def incorrect_movement_expert_ignores_switch(
     new_position = max(0, min(new_position, current_state.config.width - 1))
 
     # Assign the prediction using RandomValues
-    current_state.player.position = DiscreteDistribution(support=np.array([new_position]))  # type: ignore
+    current_state.player.position = DiscreteDistribution(support=[new_position])  # type: ignore
 
 
 def incorrect_movement_expert_ignores_slip(
@@ -173,7 +173,7 @@ def incorrect_movement_expert_ignores_slip(
     new_position = max(0, min(new_position, current_state.config.width - 1))
 
     # Assign the prediction using RandomValues
-    current_state.player.position = DiscreteDistribution(support=np.array([new_position]))  # type: ignore
+    current_state.player.position = DiscreteDistribution(support=[new_position])  # type: ignore
 
 
 def incorrect_light_expert_is_deterministic(
@@ -196,7 +196,7 @@ def incorrect_light_expert_is_deterministic(
         new_state = not light.is_on
 
         # Assign the prediction using RandomValues
-        light.is_on = DiscreteDistribution(support=np.array([new_state]))  # type: ignore
+        light.is_on = DiscreteDistribution(support=[new_state])  # type: ignore
 
 
 # Collection of all experts for easy access

@@ -22,6 +22,8 @@ import numpy.typing as npt
 import torch
 from scipy.special import logsumexp
 
+from typing import Sequence
+
 # Type variable for the metadata type used by different environments
 MetadataT = TypeVar("MetadataT")
 
@@ -40,13 +42,13 @@ class DiscreteDistribution:
 
     def __init__(
         self,
-        support: npt.NDArray[np.int32],
-        logscores: Optional[npt.NDArray[np.float32]] = None,
+        support: npt.NDArray[np.int32] | Sequence[int],
+        logscores: Optional[npt.NDArray[np.float32] | Sequence[float]] = None,
     ):
-        self.support = support
+        self.support = np.array(support)
         # Assign uniform logscores if not provided
         self.logscores = (
-            logscores
+            np.array(logscores)
             if logscores is not None
             else np.zeros_like(support, dtype=np.float32)
         )
@@ -54,12 +56,6 @@ class DiscreteDistribution:
     @classmethod
     def from_uniform(cls, support: npt.NDArray[np.int32]) -> "DiscreteDistribution":
         return cls(support=support, logscores=np.zeros_like(support, dtype=np.float32))
-
-    @classmethod
-    def from_peaks(
-        cls, peaks: npt.NDArray[np.int32], logscores: npt.NDArray[np.float32]
-    ) -> "DiscreteDistribution":
-        return cls(support=peaks, logscores=logscores)
 
     def sample(self) -> int:
         """Samples a value from the distribution."""
