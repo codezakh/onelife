@@ -25,42 +25,44 @@ class ObservableExtractor:
         Returns:
             Dictionary mapping attribute names to their domains and predictions
         """
-        predictions = {}
+        predictions: dict[ObservableId, DiscreteDistribution] = {}
 
         # Extract player position
         if isinstance(state.player.position, DiscreteDistribution):
-            predictions["player_position"] = state.player.position.expand_support(
-                self.position_domain
+            predictions[ObservableId("player_position")] = (
+                state.player.position.expand_support(self.position_domain)
             )
         else:
             # Expert didn't modify this attribute - create uniform distribution
-            predictions["player_position"] = DiscreteDistribution.from_uniform(
-                self.position_domain
+            predictions[ObservableId("player_position")] = (
+                DiscreteDistribution.from_uniform(self.position_domain)
             )
 
         # Extract light states
         for i, light in enumerate(state.lights):
             attr_name = f"light_{i}_is_on"
             if isinstance(light.is_on, DiscreteDistribution):
-                predictions[attr_name] = light.is_on.expand_support(self.bool_domain)
+                predictions[ObservableId(attr_name)] = light.is_on.expand_support(
+                    self.bool_domain
+                )
             else:
                 # Expert didn't modify this attribute - create uniform distribution
-                predictions[attr_name] = DiscreteDistribution.from_uniform(
-                    self.bool_domain
+                predictions[ObservableId(attr_name)] = (
+                    DiscreteDistribution.from_uniform(self.bool_domain)
                 )
 
         return predictions
 
     def get_observed_outcomes(self, state: GameState) -> dict[ObservableId, int]:
         """Extract ground truth observed values from a state."""
-        observed = {}
+        observed: dict[ObservableId, int] = {}
 
         # Player position
-        observed["player_position"] = state.player.position
+        observed[ObservableId("player_position")] = state.player.position
 
         # Light states
         for i, light in enumerate(state.lights):
-            observed[f"light_{i}_is_on"] = int(light.is_on)
+            observed[ObservableId(f"light_{i}_is_on")] = int(light.is_on)
 
         return observed
 

@@ -28,39 +28,6 @@ from .core import (
 )
 
 
-# def expand_to_full_domain(
-#     rv: DiscreteDistribution,
-#     all_possible_values: np.ndarray,
-#     noise_logscore: float = -10.0,
-# ) -> DiscreteDistribution:
-#     """
-#     Expand a RandomValues distribution to cover all possible values in the domain.
-
-#     Expert functions often only predict a subset of possible values for an attribute
-#     (e.g., only predicting position changes when the expert thinks movement occurs).
-#     This function expands such partial distributions to cover the full domain by
-#     assigning a low probability (noise_logscore) to values the expert didn't predict.
-
-#     This is necessary for proper combination of expert predictions, as all experts
-#     must have distributions over the same set of possible values to be combined
-#     via weighted averaging.
-
-#     Args:
-#         rv: The partial RandomValues distribution from an expert
-#         all_possible_values: Array of all possible values for this attribute
-#         noise_logscore: Log-probability assigned to values not predicted by the expert
-
-#     Returns:
-#         RandomValues distribution covering the full domain
-#     """
-#     new_logscores = np.full_like(all_possible_values, noise_logscore, dtype=np.float32)
-#     for i, val in enumerate(rv.support):
-#         if val in all_possible_values:
-#             idx = np.where(all_possible_values == val)[0][0]
-#             new_logscores[idx] = rv.logscores[i]
-#     return DiscreteDistribution(support=all_possible_values, logscores=new_logscores)
-
-
 def combine_expert_predictions_for_attr(
     expert_predictions: list[DiscreteDistribution], weights: torch.Tensor
 ) -> DiscreteDistribution:
