@@ -201,13 +201,17 @@ SymbolicStateT = TypeVar("SymbolicStateT")
 
 class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
     """
-    Maximum likelihood weight fitter using PyTorch L-BFGS optimization.
+    Learns weights for a set of expert functions that model an environment.
 
-    This implementation follows the design outlined in the PRD:
-    - Uses L-BFGS optimization for smooth convergence
-    - Constrains weights to [0, 10] range for numerical stability
-    - Supports batch sampling for computational efficiency
-    - Includes L1 regularization to encourage sparsity
+    Args:
+        observable_extractor: Extracts observable attributes from the state. These are
+        the attributes that expert functions may predict and will be used to compute the
+        loss and find the weights that maximize the likelihood of the set of loss functions.
+        learning_rate: Learning rate for the optimizer.
+        max_iterations: Maximum number of iterations to run the optimizer.
+        batch_size: Batch size for the optimizer.
+        l1_weight: Weight for the L1 regularization term.
+        weight_bounds: Bounds for the weights.
     """
 
     def __init__(
@@ -371,15 +375,6 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
                 # Get expert predictions for this attribute
                 attr_predictions = [pred[attr_name] for pred in transition_predictions]
 
-                # Use PyTorch-native combination to preserve gradients
-                # values_tensor, combined_logscores = (
-                #     combine_expert_predictions_for_attr_torch(attr_predictions, weights)
-                # )
-
-                # # Evaluate log-probability using PyTorch operations
-                # log_prob = eval_expert_predictions_logprob_for_attr_torch(
-                #     values_tensor, combined_logscores, observed_value
-                # )
                 log_prob = compute_log_prob_for_attr_from_expert_predictions_torch(
                     attr_predictions, weights, observed_value
                 )
