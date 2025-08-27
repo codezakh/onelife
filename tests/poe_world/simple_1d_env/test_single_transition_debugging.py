@@ -29,8 +29,8 @@ from distant_sunburn.poe_world.simple_1d_env.handwritten_experts import (
 )
 from distant_sunburn.poe_world.weight_fitter import (
     MaxLikelihoodWeightFitter,
-    combine_expert_predictions_torch,
-    evaluate_log_probability_torch,
+    combine_expert_predictions_for_attr_torch,
+    eval_expert_predictions_logprob_for_attr_torch,
 )
 from distant_sunburn.poe_world.simple_1d_env.observable_extractor import (
     ObservableExtractor,
@@ -177,13 +177,13 @@ class TestSingleTransitionLossComputation:
         # Test gradient flow through combination function
         weights = torch.tensor([0.7, 0.3], dtype=torch.float32, requires_grad=True)
 
-        values_tensor, combined_logscores = combine_expert_predictions_torch(
+        values_tensor, combined_logscores = combine_expert_predictions_for_attr_torch(
             attr_predictions, weights
         )
 
         # Test gradient flow through evaluation function
         observed_value = transition.next_metadata.player.position
-        log_prob = evaluate_log_probability_torch(
+        log_prob = eval_expert_predictions_logprob_for_attr_torch(
             values_tensor, combined_logscores, observed_value
         )
 

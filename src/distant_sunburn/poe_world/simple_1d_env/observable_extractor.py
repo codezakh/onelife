@@ -3,7 +3,7 @@ import torch
 
 from distant_sunburn.poe_world.core import RandomValues
 from distant_sunburn.poe_world.weight_fitter import (
-    combine_expert_predictions,
+    combine_expert_predictions_for_attr,
     expand_to_full_domain,
 )
 from distant_sunburn.simple_1d_env.environment import GameState
@@ -77,7 +77,7 @@ class ObservableExtractor:
         # Sample player position
         if "player_position" in expert_predictions:
             player_preds = expert_predictions[ObservableId("player_position")]
-            combined_dist = combine_expert_predictions(player_preds, weights)
+            combined_dist = combine_expert_predictions_for_attr(player_preds, weights)
             new_state.player.position = combined_dist.sample()
 
         # Sample light states
@@ -85,7 +85,9 @@ class ObservableExtractor:
             attr_name = f"light_{i}_is_on"
             if attr_name in expert_predictions:
                 light_preds = expert_predictions[ObservableId(attr_name)]
-                combined_dist = combine_expert_predictions(light_preds, weights)
+                combined_dist = combine_expert_predictions_for_attr(
+                    light_preds, weights
+                )
                 new_state.lights[i].is_on = bool(combined_dist.sample())
 
         return new_state

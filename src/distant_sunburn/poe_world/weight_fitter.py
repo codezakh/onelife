@@ -43,7 +43,7 @@ def expand_to_full_domain(
     return RandomValues(values=all_possible_values, logscores=new_logscores)
 
 
-def combine_expert_predictions(
+def combine_expert_predictions_for_attr(
     expert_predictions: list[RandomValues], weights: torch.Tensor
 ) -> RandomValues:
     """
@@ -82,7 +82,7 @@ def combine_expert_predictions(
     )
 
 
-def combine_expert_predictions_torch(
+def combine_expert_predictions_for_attr_torch(
     expert_predictions: list[RandomValues], weights: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
@@ -119,7 +119,7 @@ def combine_expert_predictions_torch(
     return values_tensor, combined_logscores
 
 
-def evaluate_log_probability_torch(
+def eval_expert_predictions_logprob_for_attr_torch(
     values_tensor: torch.Tensor, combined_logscores: torch.Tensor, observed_value: int
 ) -> torch.Tensor:
     """
@@ -270,31 +270,32 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
         Returns:
             List of expert predictions [n_transitions][n_experts][attribute_name]
         """
-        all_predictions: list[list[dict[ObservableId, RandomValues]]] = []
+        preds_for_all_transitions: list[list[dict[ObservableId, RandomValues]]] = []
 
         for transition in transitions:
-            transition_predictions: list[dict[ObservableId, RandomValues]] = []
+            preds_for_transition: list[dict[ObservableId, RandomValues]] = []
 
+            # Each expert make a prediction for all observable attributes
             for expert in experts:
                 # Deep copy state and run expert
                 state_copy = copy.deepcopy(transition.prev_metadata)
                 expert(state_copy, transition.action)
 
                 # Extract predictions for each attribute
-                predictions = self.observable_extractor.extract_attribute_predictions(
-                    state_copy
+                preds_from_expert = (
+                    self.observable_extractor.extract_attribute_predictions(state_copy)
                 )
-                transition_predictions.append(predictions)
+                preds_for_transition.append(preds_from_expert)
 
-            all_predictions.append(transition_predictions)
+            preds_for_all_transitions.append(preds_for_transition)
 
-        return all_predictions
+        return preds_for_all_transitions
 
     def _compute_loss(
         self,
         weights: torch.Tensor,
         transitions: list[SymbolicTransition[SymbolicStateT]],
-        expert_predictions: list[list[dict[ObservableId, RandomValues]]],
+        expert_preds_per_transition: list[list[dict[ObservableId, RandomValues]]],
     ) -> torch.Tensor:
         """
         Compute the negative log-likelihood loss for the given weights.
@@ -309,7 +310,7 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
         total_loss = torch.tensor(0.0, dtype=torch.float32)
 
         for i, transition in enumerate(transitions):
-            transition_predictions = expert_predictions[i]
+            transition_predictions = expert_preds_per_transition[i]
 
             # Get observed values from next state
             observed_values = self.observable_extractor.get_observed_values(
@@ -322,12 +323,12 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
                 attr_predictions = [pred[attr_name] for pred in transition_predictions]
 
                 # Use PyTorch-native combination to preserve gradients
-                values_tensor, combined_logscores = combine_expert_predictions_torch(
-                    attr_predictions, weights
+                values_tensor, combined_logscores = (
+                    combine_expert_predictions_for_attr_torch(attr_predictions, weights)
                 )
 
                 # Evaluate log-probability using PyTorch operations
-                log_prob = evaluate_log_probability_torch(
+                log_prob = eval_expert_predictions_logprob_for_attr_torch(
                     values_tensor, combined_logscores, observed_value
                 )
 

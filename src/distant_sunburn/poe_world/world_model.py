@@ -21,7 +21,7 @@ from .core import (
     ObservableId,
 )
 from .weight_fitter import (
-    combine_expert_predictions,
+    combine_expert_predictions_for_attr,
 )
 
 SymbolicStateT = TypeVar("SymbolicStateT")
@@ -128,7 +128,9 @@ class PoEWorldModel(Generic[SymbolicStateT, ActionT]):
         for attr_name, observed_value in observed_values.items():
             if attr_name in expert_predictions:
                 attr_predictions = expert_predictions[attr_name]
-                combined_dist = combine_expert_predictions(attr_predictions, weights)
+                combined_dist = combine_expert_predictions_for_attr(
+                    attr_predictions, weights
+                )
                 log_prob = combined_dist.evaluate_log_probability(observed_value)
                 total_log_prob += log_prob
 
@@ -143,7 +145,7 @@ class PoEWorldModel(Generic[SymbolicStateT, ActionT]):
         Returns:
             Dictionary mapping attribute names to lists of expert predictions
         """
-        all_predictions = {}
+        predictions_from_all_experts: dict[ObservableId, list[RandomValues]] = {}
 
         for expert in self._experts:
             # Deep copy state and run expert
@@ -151,17 +153,17 @@ class PoEWorldModel(Generic[SymbolicStateT, ActionT]):
             expert.expert_function(state_copy, action)
 
             # Extract predictions for each attribute
-            predictions = self.observable_extractor.extract_attribute_predictions(
+            attr_predictions = self.observable_extractor.extract_attribute_predictions(
                 state_copy
             )
 
             # Group by attribute name
-            for attr_name, prediction in predictions.items():
-                if attr_name not in all_predictions:
-                    all_predictions[attr_name] = []
-                all_predictions[attr_name].append(prediction)
+            for attr_name, attr_prediction in attr_predictions.items():
+                if attr_name not in predictions_from_all_experts:
+                    predictions_from_all_experts[attr_name] = []
+                predictions_from_all_experts[attr_name].append(attr_prediction)
 
-        return all_predictions
+        return predictions_from_all_experts
 
 
 implements(WorldModelProtocol)(PoEWorldModel)

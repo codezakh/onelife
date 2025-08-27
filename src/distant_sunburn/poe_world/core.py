@@ -6,13 +6,21 @@ across the PoE-World system, including the RandomValues class for probabilistic
 predictions and the ExpertFunction protocol.
 """
 
-from random import Random
+from typing import (
+    Any,
+    Dict,
+    Generic,
+    NewType,
+    Optional,
+    Protocol,
+    TypeVar,
+)
+
+import attrs
 import numpy as np
 import numpy.typing as npt
-from scipy.special import logsumexp
-from typing import Dict, Protocol, Any, TypeVar, Optional, Generic
-import attrs
 import torch
+from scipy.special import logsumexp
 
 # Type variable for the metadata type used by different environments
 MetadataT = TypeVar("MetadataT")
@@ -142,7 +150,6 @@ class WeightFitterProtocol(Protocol[MetadataT]):
 SymbolicStateT = TypeVar("SymbolicStateT")
 ActionT = TypeVar("ActionT")
 
-from typing import NewType, TypeAlias, Union
 
 ObservableId = NewType("ObservableId", str)
 
