@@ -33,7 +33,23 @@ def expand_to_full_domain(
 ) -> RandomValues:
     """
     Expand a RandomValues distribution to cover all possible values in the domain.
-    Values not in the current distribution get the noise_logscore.
+
+    Expert functions often only predict a subset of possible values for an attribute
+    (e.g., only predicting position changes when the expert thinks movement occurs).
+    This function expands such partial distributions to cover the full domain by
+    assigning a low probability (noise_logscore) to values the expert didn't predict.
+
+    This is necessary for proper combination of expert predictions, as all experts
+    must have distributions over the same set of possible values to be combined
+    via weighted averaging.
+
+    Args:
+        rv: The partial RandomValues distribution from an expert
+        all_possible_values: Array of all possible values for this attribute
+        noise_logscore: Log-probability assigned to values not predicted by the expert
+
+    Returns:
+        RandomValues distribution covering the full domain
     """
     new_logscores = np.full_like(all_possible_values, noise_logscore, dtype=np.float32)
     for i, val in enumerate(rv.values):
@@ -47,18 +63,25 @@ def combine_expert_predictions_for_attr(
     expert_predictions: list[RandomValues], weights: torch.Tensor
 ) -> RandomValues:
     """
-    Combine expert predictions using learned weights via matrix multiplication.
+    Combine multiple expert predictions for a single attribute using learned weights.
+
+    This implements the core Product of Experts (PoE) combination rule: the combined
+    log-probability for each value is the weighted sum of individual expert log-probabilities.
+    The weights determine how much each expert's opinion contributes to the final prediction.
+
+    This function is used for inference and evaluation where gradient preservation
+    is not needed. For weight fitting optimization, use the _torch version instead.
 
     WARNING: This function breaks PyTorch gradient flow by calling .detach().numpy().
     For weight fitting optimization, use combine_expert_predictions_torch() instead
     to preserve gradients. This function is kept for non-optimization use cases.
 
     Args:
-        expert_predictions: List of RandomValues from each expert
-        weights: Tensor of expert weights [n_experts]
+        expert_predictions: List of RandomValues from each expert for this attribute
+        weights: Tensor of expert weights [n_experts] - determines relative importance
 
     Returns:
-        Combined RandomValues distribution (gradients broken)
+        Combined RandomValues distribution representing the ensemble prediction
     """
     if not expert_predictions:
         raise ValueError("No expert predictions provided")
@@ -86,15 +109,23 @@ def combine_expert_predictions_for_attr_torch(
     expert_predictions: list[RandomValues], weights: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    PyTorch-native version of combine_expert_predictions that preserves gradients.
+    PyTorch-native version of expert prediction combination that preserves gradients.
+
+    This function performs the same PoE combination as combine_expert_predictions_for_attr
+    but keeps all operations in PyTorch tensor space to maintain gradient flow for
+    backpropagation. This is essential for the weight fitting optimization process,
+    where gradients must flow from the loss function back to the expert weights.
+
+    The combination rule is: combined_logscore[value] = sum(weight[i] * expert_logscore[i][value])
+    for each expert i and each possible value.
 
     CRITICAL: This function preserves PyTorch gradient flow by keeping all operations
     in tensor form. Use this version for weight fitting optimization. Never call
     .detach() or .numpy() on the returned tensors during optimization.
 
     Args:
-        expert_predictions: List of RandomValues from each expert
-        weights: Tensor of expert weights [n_experts]
+        expert_predictions: List of RandomValues from each expert for this attribute
+        weights: Tensor of expert weights [n_experts] - determines relative importance
 
     Returns:
         Tuple of (values_tensor, combined_logscores_tensor) preserving gradients
@@ -123,19 +154,28 @@ def eval_expert_predictions_logprob_for_attr_torch(
     values_tensor: torch.Tensor, combined_logscores: torch.Tensor, observed_value: int
 ) -> torch.Tensor:
     """
-    PyTorch-native log probability evaluation that preserves gradients.
+    Evaluate the log-probability of an observed value under combined expert predictions.
+
+    This function computes the log-probability of a specific observed value (e.g.,
+    the actual next position of an object) under the combined distribution from all
+    weighted experts. This is the core computation needed for maximum likelihood
+    weight fitting - we want to maximize the probability of observed transitions.
+
+    The function first normalizes the combined log-scores to proper log-probabilities
+    using the log-sum-exp trick, then extracts the probability for the observed value.
+    If the observed value is not in the support of the distribution, it returns -inf.
 
     CRITICAL: This function preserves PyTorch gradient flow by operating entirely
     in tensor space. The returned tensor maintains gradients with respect to the
     input logscores, enabling backpropagation through expert weight optimization.
 
     Args:
-        values_tensor: Tensor of possible values [n_values]
-        combined_logscores: Combined logscores tensor [n_values]
-        observed_value: The observed value to evaluate
+        values_tensor: Tensor of possible values [n_values] - the support of the distribution
+        combined_logscores: Combined logscores tensor [n_values] from weighted experts
+        observed_value: The actual observed value to evaluate (e.g., ground truth)
 
     Returns:
-        Log probability tensor (preserves gradients)
+        Log probability tensor of the observed value (preserves gradients)
     """
     # Normalize to log probabilities
     log_probs = combined_logscores - torch.logsumexp(combined_logscores, dim=0)
