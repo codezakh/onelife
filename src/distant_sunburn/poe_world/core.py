@@ -45,6 +45,13 @@ class DiscreteDistribution:
         support: npt.NDArray[np.int32] | Sequence[int],
         logscores: Optional[npt.NDArray[np.float32] | Sequence[float]] = None,
     ):
+        """
+        Args:
+            support: The set of possible values for the distribution. Always 1D
+            logscores: The log-probabilities of the values in the support. Should be the same
+                length as support. If None, the logscores are set to 0.0 for all values in the
+                support, corresponding to a uniform distribution.
+        """
         self.support = np.array(support)
         # Assign uniform logscores if not provided
         self.logscores = (
