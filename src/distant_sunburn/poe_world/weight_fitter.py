@@ -373,14 +373,27 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
             # Compute loss for each attribute
             for attr_name, observed_value in observed_values.items():
                 # Get expert predictions for this attribute
-                attr_predictions = [pred[attr_name] for pred in transition_predictions]
+                # Design choice: Wrap in try-except to handle cases where experts don't predict
+                # certain attributes (e.g., when entities spawn/despawn). We assume missing
+                # predictions are due to entity lifecycle changes and skip the loss computation.
+                try:
+                    attr_predictions = [
+                        pred[attr_name] for pred in transition_predictions
+                    ]
 
-                log_prob = compute_log_prob_for_attr_from_expert_predictions_torch(
-                    attr_predictions, weights, observed_value
-                )
+                    log_prob = compute_log_prob_for_attr_from_expert_predictions_torch(
+                        attr_predictions, weights, observed_value
+                    )
 
-                # Accumulate negative log-likelihood
-                total_loss -= log_prob
+                    # Accumulate negative log-likelihood
+                    total_loss -= log_prob
+                except KeyError:
+                    # Skip loss computation for attributes that experts didn't predict
+                    # This typically happens when entities spawn/despawn between states
+                    logger.debug(
+                        f"Skipping loss computation for {attr_name} - missing expert predictions"
+                    )
+                    continue
 
         return total_loss
 

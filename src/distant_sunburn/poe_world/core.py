@@ -91,7 +91,8 @@ class DiscreteDistribution:
     def sample(self) -> int:
         """Samples a value from the distribution."""
         probabilities = np.exp(self.log_probs)
-        return np.random.choice(self.support, p=probabilities)
+        # Explicitly cast to int to avoid numpy.int64
+        return int(np.random.choice(self.support, p=probabilities))
 
     @property
     def log_probs(self) -> npt.NDArray[np.float32]:

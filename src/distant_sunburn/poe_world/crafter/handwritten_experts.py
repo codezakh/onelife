@@ -137,6 +137,9 @@ def correct_entity_ai_expert(
     # Use the state's random number generator for deterministic behavior
     rng = current_state.random_state
 
+    # Track total damage to player from all entities
+    total_player_damage = 0
+
     for entity in current_state.objects:
         if entity.entity_id == current_state.player.entity_id:
             continue  # Skip player
@@ -191,11 +194,10 @@ def correct_entity_ai_expert(
                         )
                         entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
 
-            # Attack if adjacent (simplified - just damage player)
-            if distance <= 1:
-                damage = 7 if current_state.player.sleeping else 2
-                new_health = max(0, current_state.player.health - damage)
-                current_state.player.health = DiscreteDistribution(support=[new_health])  # type: ignore
+                        # Attack if adjacent (simplified - just damage player)
+                if distance <= 1:
+                    damage = 7 if current_state.player.sleeping else 2
+                    total_player_damage += damage
 
         elif entity.name == "skeleton":
             # Skeletons flee when close, shoot when in range
@@ -209,8 +211,12 @@ def correct_entity_ai_expert(
                 entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
             elif distance <= 5 and rng.uniform() < 0.5:
                 # Shoot arrow (simplified - just damage player)
-                new_health = max(0, current_state.player.health - 2)
-                current_state.player.health = DiscreteDistribution(support=[new_health])  # type: ignore
+                total_player_damage += 2
+
+    # Apply accumulated damage to player at the end
+    if total_player_damage > 0:
+        new_health = max(0, current_state.player.health - total_player_damage)
+        current_state.player.health = DiscreteDistribution(support=[new_health])  # type: ignore
 
 
 def incorrect_player_movement_expert_teleports(

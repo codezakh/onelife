@@ -14,7 +14,7 @@ from ...typing_utils import implements
 def _gamestate_to_json(state: WorldState) -> dict:
     excluded_fields = {"event_bus", "serialized_random_state"}
 
-    serialized_state = state.model_dump(exclude=excluded_fields)
+    serialized_state = state.model_dump(exclude=excluded_fields, mode="json")
 
     def format_serialized_state(serialized_state: dict) -> dict:
         # Remove the player field from the .objects list, so it isn't duplicated
