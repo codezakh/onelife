@@ -60,9 +60,6 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
             observable_extractor, []
         )
 
-        # Track which experts have been fitted
-        self._fitted_experts = set()
-
         logger.info(
             f"Initialized ExpertManager with weight_threshold={weight_threshold}"
         )
@@ -79,13 +76,6 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
         new_experts = current_experts + experts
 
         self.world_model = PoEWorldModel(self.observable_extractor, new_experts)
-
-        # Mark new experts as unfitted
-        for expert in experts:
-            # Use expert function as identifier for tracking
-            expert_id = id(expert.expert_function)
-            if expert_id not in self._fitted_experts:
-                logger.debug(f"Added unfitted expert: {expert_id}")
 
         logger.info(
             f"Added {len(experts)} experts, total: {len(self.world_model.experts)}"
@@ -109,40 +99,45 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
 
         if fast_mode:
             # Fast mode: Only fit weights for newly added experts
-            # This approach avoids complex masking by passing only new experts to the fitter
+            # Find unfitted experts and their indices
+            unfitted_experts_with_indices = [
+                (i, expert)
+                for i, expert in enumerate(self.world_model.experts)
+                if not expert.is_fitted
+            ]
 
-            # Identify new experts (those added since last fit)
-            new_experts = []
-            for expert in self.world_model.experts:
-                expert_id = id(expert.expert_function)
-                if expert_id not in self._fitted_experts:
-                    new_experts.append(expert)
-
-            if new_experts:
-                logger.info(
-                    f"Fast mode: Fitting weights for {len(new_experts)} new experts"
-                )
-
-                # Fit only new experts using existing weight fitter
-                new_expert_functions = [
-                    expert.expert_function for expert in new_experts
+            if unfitted_experts_with_indices:
+                indices, unfitted_experts = zip(*unfitted_experts_with_indices)
+                expert_functions = [
+                    expert.expert_function for expert in unfitted_experts
                 ]
-                new_weighted_experts = self.weight_fitter.fit(
-                    new_expert_functions, transitions
+
+                logger.info(
+                    f"Fast mode: Fitting weights for {len(unfitted_experts)} new experts"
                 )
 
-                # Update weights for new experts while preserving existing weights
-                self._update_weights_for_new_experts(new_weighted_experts)
+                # Fit the unfitted experts
+                fitted_experts = self.weight_fitter.fit(expert_functions, transitions)
 
-                # Mark new experts as fitted
-                for expert in new_experts:
-                    expert_id = id(expert.expert_function)
-                    self._fitted_experts.add(expert_id)
-                    logger.debug(f"Marked expert {expert_id} as fitted")
+                # Validate that the returned list has the expected length
+                if len(fitted_experts) != len(expert_functions):
+                    raise ValueError(
+                        f"Weight fitter returned {len(fitted_experts)} experts but expected {len(expert_functions)}. "
+                        "The returned list should maintain the same order and length as the input experts list."
+                    )
+
+                # Update the experts at the specific indices
+                updated_experts = list(self.world_model.experts)  # Create a copy
+                for idx, fitted_expert in zip(indices, fitted_experts):
+                    updated_experts[idx] = fitted_expert
+
+                self.world_model = PoEWorldModel(
+                    self.observable_extractor, updated_experts
+                )
             else:
                 logger.debug("Fast mode: No new experts to fit")
         else:
-            # Full mode: Fit all experts (current behavior)
+            # Full mode: Fit all experts
             logger.info(
                 f"Full mode: Fitting weights for all {len(self.world_model.experts)} experts"
             )
@@ -150,20 +145,21 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
             all_expert_functions = [
                 expert.expert_function for expert in self.world_model.experts
             ]
-            all_weighted_experts = self.weight_fitter.fit(
+            all_fitted_experts = self.weight_fitter.fit(
                 all_expert_functions, transitions
             )
 
-            # Replace world model with new weighted experts
-            self.world_model = PoEWorldModel(
-                self.observable_extractor, all_weighted_experts
-            )
+            # Validate that the returned list has the expected length
+            if len(all_fitted_experts) != len(all_expert_functions):
+                raise ValueError(
+                    f"Weight fitter returned {len(all_fitted_experts)} experts but expected {len(all_expert_functions)}. "
+                    "The returned list should maintain the same order and length as the input experts list."
+                )
 
-            # Mark all experts as fitted
-            for expert in self.world_model.experts:
-                expert_id = id(expert.expert_function)
-                self._fitted_experts.add(expert_id)
-                logger.debug(f"Marked expert {expert_id} as fitted")
+            # Replace all experts (same order)
+            self.world_model = PoEWorldModel(
+                self.observable_extractor, all_fitted_experts
+            )
 
     def prune_experts(self) -> None:
         """
@@ -188,11 +184,6 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
             self.world_model = PoEWorldModel(
                 self.observable_extractor, remaining_experts
             )
-
-            # Update fitted tracking to only include remaining experts
-            self._fitted_experts = {
-                id(expert.expert_function) for expert in remaining_experts
-            }
 
             logger.info(
                 f"Pruned {pruned_count} experts below threshold {self.weight_threshold}"
@@ -246,7 +237,9 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
             "expert_weights": torch.tensor(
                 [expert.weight for expert in self.world_model.experts]
             ),
-            "fitted_expert_ids": torch.tensor(list(self._fitted_experts)),
+            "expert_is_fitted": torch.tensor(
+                [expert.is_fitted for expert in self.world_model.experts]
+            ),
         }
 
         # Save using safetensors
@@ -281,11 +274,25 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
                 # Load basic data
                 weight_threshold = f.get_tensor("weight_threshold").item()
                 expert_weights = f.get_tensor("expert_weights").numpy()
-                fitted_expert_ids = f.get_tensor("fitted_expert_ids").numpy()
+
+                # Load is_fitted status - this field is required
+                try:
+                    expert_is_fitted = f.get_tensor("expert_is_fitted").numpy()
+                except KeyError:
+                    raise ValueError(
+                        f"Checkpoint {checkpoint_path} is missing required 'expert_is_fitted' field. "
+                        "This indicates an incompatible checkpoint format."
+                    )
+
+            # Validate tensor lengths match
+            if len(expert_weights) != len(expert_is_fitted):
+                raise ValueError(
+                    f"Checkpoint tensor length mismatch: expert_weights has {len(expert_weights)} "
+                    f"elements but expert_is_fitted has {len(expert_is_fitted)} elements"
+                )
 
             # Update manager state
             self.weight_threshold = weight_threshold
-            self._fitted_experts = set(fitted_expert_ids.tolist())
 
             # Update expert weights in world model
             if len(expert_weights) == len(self.world_model.experts):
@@ -294,6 +301,7 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
                     updated_expert = WeightedExpert(
                         expert_function=expert.expert_function,
                         weight=float(expert_weights[i]),
+                        is_fitted=bool(expert_is_fitted[i]),
                     )
                     updated_experts.append(updated_expert)
 
@@ -312,38 +320,3 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
         except Exception as e:
             logger.error(f"Failed to load checkpoint {checkpoint_path}: {e}")
             return False
-
-    def _update_weights_for_new_experts(
-        self, new_weighted_experts: List[WeightedExpert]
-    ) -> None:
-        """
-        Update weights for new experts while preserving existing expert weights.
-
-        This helper method is used during fast mode to merge new expert weights
-        with existing ones without refitting all experts.
-
-        Args:
-            new_weighted_experts: Newly fitted weighted experts
-        """
-        # Create mapping from expert function to new weight
-        new_weights = {id(we.expert_function): we.weight for we in new_weighted_experts}
-
-        # Update existing experts with new weights where available
-        updated_experts = []
-        for expert in self.world_model.experts:
-            expert_id = id(expert.expert_function)
-            if expert_id in new_weights:
-                # Use new weight
-                updated_expert = WeightedExpert(
-                    expert_function=expert.expert_function,
-                    weight=new_weights[expert_id],
-                )
-            else:
-                # Keep existing weight
-                updated_expert = expert
-            updated_experts.append(updated_expert)
-
-        # Update world model
-        self.world_model = PoEWorldModel(self.observable_extractor, updated_experts)
-
-        logger.debug(f"Updated weights for {len(new_weighted_experts)} new experts")

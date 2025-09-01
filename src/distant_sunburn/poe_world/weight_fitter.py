@@ -244,7 +244,13 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
             transitions: Training data as symbolic transitions
 
         Returns:
-            List of weighted experts with learned weights
+            List of weighted experts with learned weights. The returned list maintains
+            the same order as the input experts list - experts[i] corresponds to
+            returned_weighted_experts[i].
+
+        Note:
+            All returned WeightedExpert instances have is_fitted=True to indicate
+            they have been fitted with learned weights.
         """
         if not experts or not transitions:
             return []
@@ -302,7 +308,9 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
 
         for i, (expert, weight) in enumerate(zip(experts, final_weights)):
             weighted_experts.append(
-                WeightedExpert(expert_function=expert, weight=float(weight))
+                WeightedExpert(
+                    expert_function=expert, weight=float(weight), is_fitted=True
+                )
             )
             logger.debug(f"Expert {i}: weight = {weight:.4f}")
 

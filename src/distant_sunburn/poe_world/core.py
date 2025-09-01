@@ -156,6 +156,7 @@ class WeightedExpert:
 
     expert_function: Any  # ExpertFunction - avoiding generic issue
     weight: float
+    is_fitted: bool = False
 
 
 class WorldModelProtocol(Protocol[MetadataT]):
@@ -184,7 +185,21 @@ class WeightFitterProtocol(Protocol[MetadataT]):
         self,
         experts: list[ExpertFunction[MetadataT]],
         transitions: list[SymbolicTransition[MetadataT]],
-    ) -> list[WeightedExpert]: ...
+    ) -> list[WeightedExpert]:
+        """
+        Fit weights to a set of experts based on a dataset of transitions.
+
+        Args:
+            experts: List of expert functions to fit weights for
+            transitions: Training data as symbolic transitions
+
+        Returns:
+            List of weighted experts with learned weights. The returned list maintains
+            the same order as the input experts list - experts[i] corresponds to
+            returned_weighted_experts[i]. All returned WeightedExpert instances have
+            is_fitted=True to indicate they have been fitted with learned weights.
+        """
+        ...
 
 
 SymbolicStateT = TypeVar("SymbolicStateT")
