@@ -73,7 +73,7 @@ def generate_test_transitions(
     return transitions
 
 
-def test_expert_manager_with_orchestrator():
+def test_expert_manager_with_orchestrator(tmp_path):
     """
     Integration test that validates ExpertManager works with ObjectModelOrchestrator.
 
@@ -125,7 +125,7 @@ def test_expert_manager_with_orchestrator():
         max_experts_per_object_type=10,
     )
 
-    # Create orchestrator
+    # Create orchestrator with temporary checkpoint directory
     orchestrator = ObjectModelOrchestrator(
         object_type="player",
         non_creation_expert_manager=non_creation_manager,
@@ -133,6 +133,7 @@ def test_expert_manager_with_orchestrator():
         non_creation_synthesizer=non_creation_synthesizer,
         creation_synthesizer=creation_synthesizer,
         config=config,
+        checkpoint_dir=str(tmp_path),
     )
 
     # Generate test data
@@ -168,7 +169,7 @@ def test_expert_manager_with_orchestrator():
     ), "At least some weights should have been learned"
 
 
-def test_fast_inference_with_expert_manager():
+def test_fast_inference_with_expert_manager(tmp_path):
     """
     Test that fast inference works correctly with ExpertManager.
 
@@ -211,7 +212,7 @@ def test_fast_inference_with_expert_manager():
         max_experts_per_object_type=5,
     )
 
-    # Create orchestrator
+    # Create orchestrator with temporary checkpoint directory
     orchestrator = ObjectModelOrchestrator(
         object_type="player",
         non_creation_expert_manager=non_creation_manager,
@@ -219,6 +220,7 @@ def test_fast_inference_with_expert_manager():
         non_creation_synthesizer=non_creation_synthesizer,
         creation_synthesizer=creation_synthesizer,
         config=config,
+        checkpoint_dir=str(tmp_path),
     )
 
     # Add initial datapoints and run full inference

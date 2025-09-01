@@ -153,6 +153,7 @@ class ObjectModelOrchestrator(Generic[SymbolicStateT, ActionT]):
         non_creation_synthesizer: ExpertSynthesizerProtocol[SymbolicStateT, ActionT],
         creation_synthesizer: ExpertSynthesizerProtocol[SymbolicStateT, ActionT],
         config: LearningConfig,
+        checkpoint_dir: str = "checkpoints",
     ):
         """
         Initialize the object model orchestrator.
@@ -171,6 +172,7 @@ class ObjectModelOrchestrator(Generic[SymbolicStateT, ActionT]):
         self.non_creation_synthesizer = non_creation_synthesizer
         self.creation_synthesizer = creation_synthesizer
         self.config = config
+        self.checkpoint_dir = checkpoint_dir
 
         # State management (similar to external implementation)
         self.transitions: List[SymbolicTransition[SymbolicStateT]] = []
@@ -522,7 +524,7 @@ class ObjectModelOrchestrator(Generic[SymbolicStateT, ActionT]):
             Checkpoint file path
         """
         checkpoint_str = "final" if checkpoint is None else str(checkpoint)
-        return f"checkpoints/{self.object_type}/{checkpoint_str}.pkl"
+        return f"{self.checkpoint_dir}/{self.object_type}/{checkpoint_str}.pkl"
 
     def get_model(self) -> ObjectTypeModel[SymbolicStateT, ActionT]:
         """Get the current object type model."""
