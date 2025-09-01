@@ -5,44 +5,20 @@ This module implements the expert synthesis algorithm that generates Python code
 to explain observed state transitions in the Crafter environment.
 """
 
-import asyncio
-from typing import Any, List, Protocol, Tuple, Optional
-from dataclasses import dataclass
+from typing import List, Optional
 import ast
-import re
 from loguru import logger
 
 from crafter.state_export import WorldState
-from crafter.constants import ActionT as CrafterAction
-from ..core import SymbolicTransition, ExpertFunction, DiscreteDistribution
+from ..core import (
+    SymbolicTransition,
+    ExpertSynthesizerProtocol,
+    WeightedExpert,
+    ExpertFunction,
+)
 from ...litellm_utils import LiteLlmRequest, LiteLlmMessage, GeminiLiteLlmParams
-
-
-@dataclass
-class SynthesizedExpert:
-    """A synthesized expert function."""
-
-    code: str
-    object_type: str
-    description: str
-
-
-class ExpertSynthesizerProtocol(Protocol):
-    """Protocol for expert synthesis from state transitions."""
-
-    async def synthesize_experts(
-        self,
-        transitions: List[SymbolicTransition[WorldState]],
-        object_type: str,
-    ) -> List[SynthesizedExpert]:
-        """
-        Synthesize expert programs from state transitions.
-
-        This method expects transitions that have already been filtered for "surprising"
-        ones by the calling ObjModelLearner. The synthesizer focuses purely on
-        generating experts from the provided transitions.
-        """
-        ...
+from ...typing_utils import implements
+from ...local_code_execution import ExecWithLimitedNamespace
 
 
 class CrafterExpertSynthesizer:
@@ -68,7 +44,7 @@ class CrafterExpertSynthesizer:
         self,
         transitions: List[SymbolicTransition[WorldState]],
         object_type: str,
-    ) -> List[SynthesizedExpert]:
+    ) -> List[WeightedExpert]:
         """
         Synthesize expert programs from state transitions.
 
@@ -81,7 +57,7 @@ class CrafterExpertSynthesizer:
             object_type: Type of object to synthesize experts for
 
         Returns:
-            List of synthesized expert programs
+            List of WeightedExpert objects containing compiled expert functions
         """
         if not transitions:
             return []
@@ -97,7 +73,6 @@ class CrafterExpertSynthesizer:
                     experts.append(expert)
             except Exception as e:
                 logger.error(f"Failed to synthesize expert for transition: {e}")
-                # TODO: Consider this out of scope for now as per Q&A
                 continue
 
         return experts
@@ -106,7 +81,7 @@ class CrafterExpertSynthesizer:
         self,
         transition: SymbolicTransition[WorldState],
         object_type: str,
-    ) -> Optional[SynthesizedExpert]:
+    ) -> Optional[WeightedExpert]:
         """
         Synthesize a single expert for a specific transition.
 
@@ -115,7 +90,7 @@ class CrafterExpertSynthesizer:
             object_type: Type of object to focus on
 
         Returns:
-            Synthesized expert or None if synthesis failed
+            WeightedExpert or None if synthesis failed
         """
         # Create prompt for the LLM
         prompt = self._create_synthesis_prompt(transition, object_type)
@@ -150,10 +125,16 @@ class CrafterExpertSynthesizer:
                 logger.warning("Generated expert code failed validation")
                 return None
 
-            return SynthesizedExpert(
-                code=expert_code,
-                object_type=object_type,
-                description=f"Generated expert for {object_type} based on transition",
+            # Compile the expert function
+            expert_function = self._compile_expert_function(expert_code, object_type)
+            if not expert_function:
+                logger.warning("Failed to compile expert function")
+                return None
+
+            return WeightedExpert(
+                expert_function=expert_function,
+                weight=1.0,
+                is_fitted=False,
             )
 
         except Exception as e:
@@ -170,7 +151,7 @@ Your task is to generate a Python function that modifies a WorldState object to 
 2. Modify the state in-place by assigning DiscreteDistribution objects to attributes
 3. Only modify attributes that are relevant to the observed changes
 4. Use DiscreteDistribution(support=[value]) to make deterministic predictions
-5. Return the modified state
+5. Return None (modify state in-place)
 
 The function should be named `alter_{object_type}_objects` where {object_type} is the type of object being modified.
 
@@ -182,11 +163,10 @@ Do NOT modify inventory, achievements, or other non-observable attributes.
 
 Example:
 ```python
-def alter_player_objects(state: WorldState, action: str) -> WorldState:
+def alter_player_objects(current_state: WorldState, action: str) -> None:
     if action == "move_right":
-        new_x = min(state.size[0] - 1, state.player.position.x + 1)
-        state.player.position.x = DiscreteDistribution(support=[new_x])
-    return state
+        new_x = min(current_state.size[0] - 1, current_state.player.position.x + 1)
+        current_state.player.position.x = DiscreteDistribution(support=[new_x])
 ```
 
 Generate only the function code, no explanations or markdown formatting."""
@@ -211,9 +191,9 @@ Generate only the function code, no explanations or markdown formatting."""
 **Object Type:** {object_type}
 
 Please generate a Python function named `alter_{object_type}_objects` that explains these changes. The function should:
-- Take `state: WorldState` and `action: str` as parameters
-- Modify the state in-place by assigning DiscreteDistribution objects to relevant attributes
-- Return the modified state
+- Take `current_state: WorldState` and `action: str` as parameters
+- Modify the current_state in-place by assigning DiscreteDistribution objects to relevant attributes
+- Return None
 - Only modify observable attributes that are relevant to the observed changes:
   * player_position_x, player_position_y, player_health
   * entity_{{entity_id}}_position_x, entity_{{entity_id}}_position_y, entity_{{entity_id}}_health
@@ -310,3 +290,37 @@ Generate only the function code:"""
             return True
         except SyntaxError:
             return False
+
+    def _compile_expert_function(
+        self, code: str, object_type: str
+    ) -> Optional[ExpertFunction[WorldState]]:
+        """Compile the generated code into a callable expert function."""
+        try:
+            function_name = f"alter_{object_type}_objects"
+
+            # Create executor with access to required classes
+            from crafter.state_export import WorldState
+            from ..core import DiscreteDistribution
+
+            executor = ExecWithLimitedNamespace(
+                inherited_scope={
+                    "WorldState": WorldState,
+                    "DiscreteDistribution": DiscreteDistribution,
+                },
+                allowed_names={"WorldState", "DiscreteDistribution"},
+            )
+
+            # Compile the code
+            executor(code)
+
+            # Extract the compiled function from the namespace
+            expert_function = executor.namespace[function_name]
+
+            return expert_function
+
+        except Exception as e:
+            logger.error(f"Failed to compile expert function: {e}")
+            return None
+
+
+implements(ExpertSynthesizerProtocol[WorldState])(CrafterExpertSynthesizer)
