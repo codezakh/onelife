@@ -18,15 +18,6 @@ from ...litellm_utils import GeminiLiteLlmParams
 
 
 class ObjModelLearner:
-    """
-    Object Model Learner for a specific object type in Crafter.
-
-    This class manages the synthesis process for a specific object type,
-    following the PoE-World design document. It maintains a world model
-    for the object type and synthesizes new experts when transitions
-    are "surprising" (low probability under the current model).
-    """
-
     def __init__(
         self,
         object_type: str,
