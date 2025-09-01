@@ -34,9 +34,14 @@ class ExpertSynthesizerProtocol(Protocol):
         self,
         transitions: List[SymbolicTransition[WorldState]],
         object_type: str,
-        surprise_threshold: float = -2.0,
     ) -> List[SynthesizedExpert]:
-        """Synthesize expert programs from state transitions."""
+        """
+        Synthesize expert programs from state transitions.
+
+        This method expects transitions that have already been filtered for "surprising"
+        ones by the calling ObjModelLearner. The synthesizer focuses purely on
+        generating experts from the provided transitions.
+        """
         ...
 
 
@@ -63,15 +68,17 @@ class CrafterExpertSynthesizer:
         self,
         transitions: List[SymbolicTransition[WorldState]],
         object_type: str,
-        surprise_threshold: float = -2.0,
     ) -> List[SynthesizedExpert]:
         """
         Synthesize expert programs from state transitions.
 
+        This method expects transitions that have already been filtered for "surprising"
+        ones by the calling ObjModelLearner. The synthesizer focuses purely on
+        generating experts from the provided transitions.
+
         Args:
-            transitions: Sequence of state transitions to analyze
+            transitions: Sequence of state transitions to analyze (already filtered for surprising ones)
             object_type: Type of object to synthesize experts for
-            surprise_threshold: Log probability threshold for "surprising" transitions
 
         Returns:
             List of synthesized expert programs
@@ -79,18 +86,9 @@ class CrafterExpertSynthesizer:
         if not transitions:
             return []
 
-        # Filter for surprising transitions
-        surprising_transitions = self._filter_surprising_transitions(
-            transitions, surprise_threshold
-        )
-
-        if not surprising_transitions:
-            logger.info(f"No surprising transitions found for {object_type}")
-            return []
-
-        # Generate experts for surprising transitions
+        # Generate experts for all provided transitions (assumed to be surprising)
         experts = []
-        for transition in surprising_transitions:
+        for transition in transitions:
             try:
                 expert = await self._synthesize_expert_for_transition(
                     transition, object_type
@@ -103,21 +101,6 @@ class CrafterExpertSynthesizer:
                 continue
 
         return experts
-
-    def _filter_surprising_transitions(
-        self,
-        transitions: List[SymbolicTransition[WorldState]],
-        surprise_threshold: float,
-    ) -> List[SymbolicTransition[WorldState]]:
-        """
-        Filter transitions that are "surprising" (low probability under current model).
-
-        This method is not used in the ObjModelLearner implementation, which uses
-        the world model's evaluate_log_probability method instead.
-        """
-        # This method is kept for backward compatibility but should not be used
-        # in the proper ObjModelLearner implementation
-        return transitions
 
     async def _synthesize_expert_for_transition(
         self,

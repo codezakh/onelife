@@ -32,22 +32,6 @@ class TestCrafterExpertSynthesizer:
         synthesizer = create_crafter_synthesizer()
         assert isinstance(synthesizer, CrafterExpertSynthesizer)
 
-    def test_filter_surprising_transitions_placeholder(self, simple_world_state):
-        """Test that the placeholder filter method works."""
-        synthesizer = CrafterExpertSynthesizer()
-
-        # Create a simple transition
-        transition = SymbolicTransition(
-            prev_metadata=simple_world_state,
-            action="move_right",
-            next_metadata=simple_world_state,
-        )
-
-        # The placeholder method should return all transitions
-        surprising = synthesizer._filter_surprising_transitions([transition], -2.0)
-        assert len(surprising) == 1
-        assert surprising[0] == transition
-
     def test_extract_state_changes(self, cow_attack_scenario):
         """Test that state changes are correctly extracted for observable attributes only."""
         synthesizer = CrafterExpertSynthesizer()
@@ -115,8 +99,9 @@ async def test_synthesize_experts_integration(cow_attack_scenario):
     """
     Integration test for expert synthesis.
 
-    This test uses a mock LLM response to verify the synthesis pipeline works.
-    Note: This test requires an actual LLM call, so it's marked as integration.
+    This test verifies that the synthesizer can generate experts from transitions.
+    Note: The synthesizer assumes transitions are already filtered for surprising ones.
+    This test requires an actual LLM call, so it's marked as integration.
     """
     # Skip if no API key is available
     import os
@@ -127,10 +112,10 @@ async def test_synthesize_experts_integration(cow_attack_scenario):
     synthesizer = CrafterExpertSynthesizer()
 
     # Try to synthesize experts for cow object type
+    # Note: The synthesizer assumes these transitions are already filtered for surprising ones
     experts = await synthesizer.synthesize_experts(
         transitions=[cow_attack_scenario],
         object_type="cow",
-        surprise_threshold=-2.0,
     )
 
     # Should find at least one surprising transition

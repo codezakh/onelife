@@ -158,7 +158,6 @@ class ObjModelLearner:
         experts = await self.synthesizer.synthesize_experts(
             transitions=[custom_transition],
             object_type=self.object_type,
-            surprise_threshold=self.surprise_threshold,
         )
 
         return experts
