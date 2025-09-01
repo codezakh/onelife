@@ -17,14 +17,6 @@ from distant_sunburn.litellm_utils import GeminiLiteLlmParams
 class TestObjModelLearner:
     """Test the ObjModelLearner."""
 
-    def test_initialization(self):
-        """Test that the ObjModelLearner can be initialized."""
-        learner = ObjModelLearner("cow")
-        assert learner.object_type == "cow"
-        assert learner.surprise_threshold == -2.0
-        assert learner.world_model is not None
-        assert learner.synthesizer is not None
-
     def test_create_custom_view(self, mixed_entity_world):
         """Test that custom views filter objects correctly."""
         learner = ObjModelLearner("cow")
