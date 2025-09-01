@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+---
+Do not use silent placeholders in which you leave a TODO and a "stub" implementation. Instead, RAISE a NotImplementedError. It can be _very_ dangerous to have a silent placeholder.
