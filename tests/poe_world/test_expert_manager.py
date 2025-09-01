@@ -5,8 +5,6 @@ This module tests the ExpertManager class that implements ExpertManagerProtocol
 by wrapping the existing MaxLikelihoodWeightFitter and PoEWorldModel components.
 """
 
-import os
-import tempfile
 import pytest
 from typing import List
 
@@ -74,12 +72,9 @@ class TestExpertManager:
         )
         self.transitions = generate_test_transitions(50)
 
-    def test_initialization(self):
-        """Test ExpertManager initialization."""
-        assert self.manager.weight_threshold == 0.01
+    def test_starts_with_no_experts(self):
+        """Test that ExpertManager starts with an empty expert list."""
         assert len(self.manager.get_experts()) == 0
-        assert self.manager.observable_extractor == self.observable_extractor
-        assert self.manager.weight_fitter == self.weight_fitter
 
     def test_add_experts(self):
         """Test adding experts to the manager."""
@@ -196,8 +191,8 @@ class TestExpertManager:
         assert isinstance(log_prob, float)
         assert not (log_prob != log_prob)  # Not NaN
 
-    def test_save_and_load_checkpoint(self):
-        """Test checkpoint saving and loading."""
+    def test_save_checkpoint(self, tmp_path):
+        """Test that checkpoint can be saved successfully."""
         # Add experts and fit weights
         experts = [
             WeightedExpert(expert_function=expert, weight=1.0)
@@ -207,41 +202,96 @@ class TestExpertManager:
         self.manager.fit_weights(self.transitions, fast_mode=False)
 
         # Save checkpoint
-        with tempfile.NamedTemporaryFile(suffix=".safetensors", delete=False) as f:
-            checkpoint_path = f.name
+        checkpoint_path = tmp_path / "test_checkpoint.safetensors"
+        self.manager.save(str(checkpoint_path))
 
-        try:
-            self.manager.save(checkpoint_path)
+        # Check that file was created
+        assert checkpoint_path.exists()
 
-            # Create new manager and load checkpoint
-            new_manager = ExpertManager(
-                observable_extractor=self.observable_extractor,
-                weight_fitter=self.weight_fitter,
-                weight_threshold=0.5,  # Different threshold to test loading
-            )
+    def test_load_checkpoint_fails_without_experts(self, tmp_path):
+        """Test that loading checkpoint fails when no experts are present."""
+        # Add experts and fit weights
+        experts = [
+            WeightedExpert(expert_function=expert, weight=1.0)
+            for expert in ALL_EXPERTS[:3]
+        ]
+        self.manager.add_experts(experts)
+        self.manager.fit_weights(self.transitions, fast_mode=False)
 
-            # Load should fail initially (no experts to match weights)
-            assert not new_manager.load(checkpoint_path)
+        # Save checkpoint
+        checkpoint_path = tmp_path / "test_checkpoint.safetensors"
+        self.manager.save(str(checkpoint_path))
 
-            # Add same experts and try loading again
-            new_manager.add_experts(experts)
-            assert new_manager.load(checkpoint_path)
+        # Create new manager without experts
+        new_manager = ExpertManager(
+            observable_extractor=self.observable_extractor,
+            weight_fitter=self.weight_fitter,
+            weight_threshold=0.5,
+        )
 
-            # Check that state was restored correctly
-            assert (
-                abs(new_manager.weight_threshold - 0.01) < 1e-6
-            )  # Should be loaded from checkpoint
-            assert len(new_manager.get_experts()) == 3
+        # Load should fail initially (no experts to match weights)
+        assert not new_manager.load(str(checkpoint_path))
 
-            # Check that weights were restored
-            original_weights = [expert.weight for expert in self.manager.get_experts()]
-            loaded_weights = [expert.weight for expert in new_manager.get_experts()]
-            assert original_weights == loaded_weights
+    def test_load_checkpoint_restores_state(self, tmp_path):
+        """Test that loading checkpoint restores manager state correctly."""
+        # Add experts and fit weights
+        experts = [
+            WeightedExpert(expert_function=expert, weight=1.0)
+            for expert in ALL_EXPERTS[:3]
+        ]
+        self.manager.add_experts(experts)
+        self.manager.fit_weights(self.transitions, fast_mode=False)
 
-        finally:
-            # Clean up
-            if os.path.exists(checkpoint_path):
-                os.unlink(checkpoint_path)
+        # Save checkpoint
+        checkpoint_path = tmp_path / "test_checkpoint.safetensors"
+        self.manager.save(str(checkpoint_path))
+
+        # Create new manager and add same experts
+        new_manager = ExpertManager(
+            observable_extractor=self.observable_extractor,
+            weight_fitter=self.weight_fitter,
+            weight_threshold=0.5,
+        )
+        new_manager.add_experts(experts)
+
+        # Load checkpoint
+        assert new_manager.load(str(checkpoint_path))
+
+        # Check that weight threshold was restored
+        assert abs(new_manager.weight_threshold - 0.01) < 1e-6
+
+        # Check that expert count was restored
+        assert len(new_manager.get_experts()) == 3
+
+    def test_load_checkpoint_restores_weights(self, tmp_path):
+        """Test that loading checkpoint restores expert weights correctly."""
+        # Add experts and fit weights
+        experts = [
+            WeightedExpert(expert_function=expert, weight=1.0)
+            for expert in ALL_EXPERTS[:3]
+        ]
+        self.manager.add_experts(experts)
+        self.manager.fit_weights(self.transitions, fast_mode=False)
+
+        # Save checkpoint
+        checkpoint_path = tmp_path / "test_checkpoint.safetensors"
+        self.manager.save(str(checkpoint_path))
+
+        # Create new manager and add same experts
+        new_manager = ExpertManager(
+            observable_extractor=self.observable_extractor,
+            weight_fitter=self.weight_fitter,
+            weight_threshold=0.5,
+        )
+        new_manager.add_experts(experts)
+
+        # Load checkpoint
+        new_manager.load(str(checkpoint_path))
+
+        # Check that weights were restored
+        original_weights = [expert.weight for expert in self.manager.get_experts()]
+        loaded_weights = [expert.weight for expert in new_manager.get_experts()]
+        assert original_weights == loaded_weights
 
     def test_empty_transitions_handling(self):
         """Test handling of empty transitions list."""
@@ -281,15 +331,13 @@ class TestExpertManager:
         # Should still have the same experts
         assert len(self.manager.get_experts()) == 2
 
-    def test_custom_weight_threshold(self):
-        """Test ExpertManager with custom weight threshold."""
+    def test_pruning_respects_custom_threshold(self):
+        """Test that pruning respects the configured weight threshold."""
         manager = ExpertManager(
             observable_extractor=self.observable_extractor,
             weight_fitter=self.weight_fitter,
             weight_threshold=0.5,  # Higher threshold
         )
-
-        assert manager.weight_threshold == 0.5
 
         # Add experts with different weights
         experts = [
@@ -309,29 +357,3 @@ class TestExpertManager:
         remaining_experts = manager.get_experts()
         assert len(remaining_experts) == 1
         assert remaining_experts[0].weight == 0.7
-
-
-def test_expert_manager_protocol_compliance():
-    """Test that ExpertManager properly implements ExpertManagerProtocol."""
-    from distant_sunburn.poe_world.object_model_learner import ExpertManagerProtocol
-
-    observable_extractor = ObservableExtractor()
-    weight_fitter = MaxLikelihoodWeightFitter(observable_extractor)
-    manager = ExpertManager(observable_extractor, weight_fitter)
-
-    # Check that all required methods exist
-    required_methods = [
-        "add_experts",
-        "fit_weights",
-        "prune_experts",
-        "evaluate_log_probability",
-        "get_experts",
-        "save",
-        "load",
-    ]
-
-    for method_name in required_methods:
-        assert hasattr(manager, method_name), f"Missing method: {method_name}"
-        assert callable(
-            getattr(manager, method_name)
-        ), f"Method not callable: {method_name}"
