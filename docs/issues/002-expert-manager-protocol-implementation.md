@@ -114,23 +114,44 @@ def load(self, checkpoint_path: str) -> bool:
 ```
 
 #### Fast Mode Support
-Modify `fit_weights()` to support incremental updates:
+Modify `fit_weights()` to support incremental updates by fitting only new experts:
 
 ```python
 def fit_weights(self, transitions: List[SymbolicTransition], fast_mode: bool = False) -> None:
     if fast_mode:
-        # Only fit newly added experts or use simplified optimization
-        # This could involve:
-        # 1. Identifying new experts since last fit
-        # 2. Using fewer optimization iterations
-        # 3. Using a simpler optimizer
-        pass
+        # Fast mode: Only fit weights for newly added experts
+        # This approach avoids complex masking by passing only new experts to the fitter
+        
+        # Identify new experts (those added since last fit)
+        new_experts = [expert for expert in self.world_model.experts if not expert.is_fitted]
+        
+        if new_experts:
+            # Fit only new experts using existing weight fitter
+            new_expert_functions = [expert.expert_function for expert in new_experts]
+            new_weighted_experts = self.weight_fitter.fit(new_expert_functions, transitions)
+            
+            # Update weights for new experts while preserving existing weights
+            self._update_weights_for_new_experts(new_weighted_experts)
+            
+            # Mark new experts as fitted
+            for expert in new_experts:
+                expert.is_fitted = True
     else:
-        # Full weight fitting using existing MaxLikelihoodWeightFitter
-        experts = [expert.expert_function for expert in self.world_model.experts]
-        weighted_experts = self.weight_fitter.fit(experts, transitions)
-        self.world_model = PoEWorldModel(self.observable_extractor, weighted_experts)
+        # Full mode: Fit all experts (current behavior)
+        all_expert_functions = [expert.expert_function for expert in self.world_model.experts]
+        all_weighted_experts = self.weight_fitter.fit(all_expert_functions, transitions)
+        self.world_model = PoEWorldModel(self.observable_extractor, all_weighted_experts)
+        
+        # Mark all experts as fitted
+        for expert in self.world_model.experts:
+            expert.is_fitted = True
 ```
+
+**Implementation Details:**
+- Track `is_fitted` flag on each expert to identify new vs. existing experts
+- Use `_update_weights_for_new_experts()` helper to merge new weights with existing ones
+- Preserve existing expert weights during fast mode updates
+- This approach mirrors the external poe-world fast fitting strategy but with cleaner architecture
 
 ## Key Files to Examine
 
@@ -222,10 +243,25 @@ Use configurable threshold (default 0.01) to remove ineffective experts while pr
 Use pickle for simplicity initially, but consider JSON for better versioning and debugging.
 
 ### 4. Fast Mode Implementation
-For fast mode, consider:
-- Fewer optimization iterations
-- Simpler optimizer (SGD instead of L-BFGS)
-- Only fitting newly added experts
+For fast mode, use the simplified approach of fitting only new experts:
+
+**Core Strategy:**
+- Track which experts have been fitted using an `is_fitted` flag
+- During fast mode, identify and fit only newly added experts
+- Preserve existing expert weights without modification
+- Use the existing `MaxLikelihoodWeightFitter` without any modifications
+
+**Implementation Steps:**
+1. Add `is_fitted: bool` field to `WeightedExpert` or track separately in `ExpertManager`
+2. Implement `_update_weights_for_new_experts()` helper method
+3. Modify `fit_weights()` to support both full and fast modes
+4. Ensure proper state tracking across save/load operations
+
+**Benefits:**
+- No changes needed to the weight fitter component
+- Simpler and more maintainable than masking approaches
+- Preserves the single responsibility principle
+- Easier to test and debug
 
 ## Acceptance Criteria
 
@@ -252,7 +288,8 @@ For fast mode, consider:
 - Ensuring type safety across the wrapper interface
 - Handling edge cases in pruning (e.g., all experts below threshold)
 - Managing checkpoint compatibility across versions
-- Optimizing fast mode without sacrificing quality
+- Tracking expert fitting state across save/load operations
+- Ensuring fast mode doesn't lead to suboptimal weight combinations
 
 ### Performance Considerations:
 - Expert evaluation can be expensive - consider caching
