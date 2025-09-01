@@ -25,7 +25,7 @@ class TestObjModelLearner:
         custom_state = learner._create_custom_view(mixed_entity_world)
 
         # Should only contain cow objects
-        assert len(custom_state.objects) == 1
+        assert len(custom_state.objects) == 1  # Exactly one cow object
         assert custom_state.objects[0].name == "cow"
 
     def test_filter_surprising_transitions_empty_model(self, cow_attack_scenario):

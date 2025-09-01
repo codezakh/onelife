@@ -24,6 +24,9 @@ from .weight_fitter import (
     combine_expert_predictions_for_attr,
 )
 
+# Constants for log probability values
+LOG_IMPOSSIBLE_VALUE = -1000.0  # Very low probability for impossible transitions
+
 SymbolicStateT = TypeVar("SymbolicStateT")
 ActionT = TypeVar("ActionT")
 
@@ -102,14 +105,19 @@ class PoEWorldModel(Generic[SymbolicStateT, ActionT]):
         Evaluate the log-probability of a transition under this model.
 
         Args:
-            transition: The transition to evaluate
+            state: Current state
+            action: Action taken
+            next_state: Next state
 
         Returns:
             Log-probability of the transition
         """
         if not self._experts:
-            # No experts - return uniform probability (log(1) = 0)
-            return 0.0
+            # No experts - return very low probability (surprising)
+            # This follows the original PoE-World behavior: when there are no experts,
+            # the model predicts no objects, making any observed transition "impossible"
+            # and thus surprising (low probability)
+            return LOG_IMPOSSIBLE_VALUE
 
         # Get expert predictions
         expert_predictions = self._get_expert_predictions(state, action)

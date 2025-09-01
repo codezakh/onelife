@@ -109,7 +109,7 @@ def mixed_entity_world() -> WorldState:
     Contains:
     - 1 player
     - 1 cow at (3, 3)
-    - 1 zombie at (4, 4)
+    - 1 zombie at (5, 5)  # Changed from (4, 4) to avoid position conflicts
     """
     view = (9, 9)
     state = initial_state(area=(9, 9), view=view, seed=42)
@@ -118,9 +118,16 @@ def mixed_entity_world() -> WorldState:
     # Find the player
     player = _find_player(world)
 
-    # Add different types of objects
+    # Clear existing cows and zombies to ensure we have exactly what we want
+    from crafter.objects import Cow, Zombie
+
+    to_remove = [obj for obj in world.objects if isinstance(obj, (Cow, Zombie))]
+    for obj in to_remove:
+        world.remove(obj)
+
+    # Add exactly one cow and one zombie at specific positions
     cow = objects.Cow(world, (3, 3))
-    zombie = objects.Zombie(world, (4, 4), player)
+    zombie = objects.Zombie(world, (5, 5), player)
     world.add(cow)
     world.add(zombie)
 
