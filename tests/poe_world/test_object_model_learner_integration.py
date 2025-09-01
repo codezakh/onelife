@@ -211,16 +211,11 @@ def test_crafter_integration_with_real_synthesizer(tmp_path: Path):
             0
         ].prev_metadata  # Use the first transition's initial state
 
-        try:
-            # Call the expert function with a test action
-            result = test_expert.expert_function(test_state, "move_right")
-            print(f"\n=== Expert Function Test ===")
-            print(f"Function call result: {result}")
-            print(f"Function executed successfully without errors")
-        except Exception as e:
-            print(f"\n=== Expert Function Test ===")
-            print(f"Function execution failed: {e}")
-            # Don't fail the test for now, just log the issue
+        # Call the expert function with a test action
+        result = test_expert.expert_function(test_state, "move_right")
+        print(f"\n=== Expert Function Test ===")
+        print(f"Function call result: {result}")
+        print(f"Function executed successfully without errors")
 
 
 def test_fast_inference_with_crafter_expert_manager(tmp_path: Path):
