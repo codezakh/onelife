@@ -309,7 +309,9 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
         for i, (expert, weight) in enumerate(zip(experts, final_weights)):
             weighted_experts.append(
                 WeightedExpert(
-                    expert_function=expert, weight=float(weight), is_fitted=True
+                    expert_function=expert,
+                    weight=float(weight),
+                    is_fitted=True,
                 )
             )
             logger.debug(f"Expert {i}: weight = {weight:.4f}")

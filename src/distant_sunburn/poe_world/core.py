@@ -138,6 +138,11 @@ class ExpertFunction(Protocol[MetadataT]):
         """
         ...
 
+    @property
+    def __source_code__(self) -> str:
+        """The source code of the expert function."""
+        ...
+
 
 @attrs.define(frozen=True)
 class SymbolicTransition(Generic[MetadataT]):
@@ -157,7 +162,6 @@ class WeightedExpert:
 
     expert_function: Any  # ExpertFunction - avoiding generic issue
     weight: float
-    expert_source_code: str
     is_fitted: bool = False
 
 

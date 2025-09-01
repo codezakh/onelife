@@ -135,7 +135,6 @@ class CrafterExpertSynthesizer:
                 expert_function=expert_function,
                 weight=1.0,
                 is_fitted=False,
-                expert_source_code=expert_code,
             )
 
         except Exception as e:
@@ -332,6 +331,9 @@ Generate only the function code:"""
 
             # Extract the compiled function from the namespace
             expert_function = executor.namespace[function_name]
+
+            # Set the expert source code
+            expert_function.__source_code__ = code
 
             return expert_function
 

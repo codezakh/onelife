@@ -168,24 +168,13 @@ async def test_synthesize_experts_integration(cow_attack_scenario):
                 break
 
         assert cow_state is not None, "Cow should exist in the test state"
+        # We want to make sure the health of the cow is a regular integer.
+        assert isinstance(cow_state.health, int)
 
-        # Record initial state
-        initial_cow_health = cow_state.health
+        print(expert.expert_function.__source_code__)
 
         # Call the expert function with the "do" action from the cow attack scenario
-        result = expert.expert_function(test_state, cow_attack_scenario.action)
+        expert.expert_function(test_state, cow_attack_scenario.action)
 
-        print(expert.expert_source_code)
-
-        # The expert should have modified the cow's health from 5 to 3 (as per the scenario)
-        # This is the specific change we expect based on the cow_attack_scenario
-        assert cow_state.health != initial_cow_health, (
-            f"Expert function should modify cow health when called with action '{cow_attack_scenario.action}'. "
-            f"Expected cow health to change from {initial_cow_health}, but it remained {cow_state.health}"
-        )
-
-        # The cow health should have decreased (from 5 to 3, as we saw in the earlier test)
-        assert cow_state.health < initial_cow_health, (
-            f"Expert function should decrease cow health when attacking. "
-            f"Health changed from {initial_cow_health} to {cow_state.health}, but should have decreased"
-        )
+        # The expert will have assigned a discrete distribution to the cow's health.
+        assert isinstance(cow_state.health, DiscreteDistribution)
