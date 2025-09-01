@@ -30,55 +30,13 @@ from dataclasses import dataclass
 from loguru import logger
 
 from .core import SymbolicTransition, WeightedExpert
+from .expert_manager import ExpertManager
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 ActionT = TypeVar("ActionT")
 
 
-class ExpertManagerProtocol(Protocol[SymbolicStateT, ActionT]):
-    """
-    Protocol for expert managers that handle a collection of experts for a specific behavior type.
-
-    This corresponds to MoEObjModel in external poe-world. Each expert manager handles
-    either non-creation experts (for existing objects) or creation experts (for new objects).
-    """
-
-    def add_experts(self, experts: List[WeightedExpert]) -> None:
-        """Add new experts to this manager."""
-        ...
-
-    def fit_weights(
-        self,
-        transitions: List[SymbolicTransition[SymbolicStateT]],
-        fast_mode: bool = False,
-    ) -> None:
-        """Fit expert weights using the given transitions."""
-        ...
-
-    def prune_experts(self) -> None:
-        """Remove experts with low/zero weights."""
-        ...
-
-    def evaluate_log_probability(
-        self, state: SymbolicStateT, action: ActionT, next_state: SymbolicStateT
-    ) -> float:
-        """Evaluate log probability of a transition under this manager's experts."""
-        ...
-
-    def get_experts(self) -> List[WeightedExpert]:
-        """Get all experts managed by this manager."""
-        ...
-
-    def save(self, checkpoint_path: str) -> None:
-        """Save manager state to checkpoint."""
-        ...
-
-    def load(self, checkpoint_path: str) -> bool:
-        """Load manager state from checkpoint. Returns True if successful."""
-        ...
-
-
-class ExpertSynthesizerProtocol(Protocol[SymbolicStateT, ActionT]):
+class ExpertSynthesizerProtocol(Protocol[SymbolicStateT]):
     """
     Protocol for expert synthesizers that can generate new experts from transitions.
 
@@ -112,7 +70,7 @@ class ObjectTypeModel(Generic[SymbolicStateT, ActionT]):
 
 
 @dataclass
-class LearningConfig:
+class ObjectModelOrchestratorConfig:
     """Configuration for the object model learning process."""
 
     batch_size: int = 10
@@ -148,11 +106,11 @@ class ObjectModelOrchestrator(Generic[SymbolicStateT, ActionT]):
     def __init__(
         self,
         object_type: str,
-        non_creation_expert_manager: ExpertManagerProtocol[SymbolicStateT, ActionT],
-        creation_expert_manager: ExpertManagerProtocol[SymbolicStateT, ActionT],
-        non_creation_synthesizer: ExpertSynthesizerProtocol[SymbolicStateT, ActionT],
-        creation_synthesizer: ExpertSynthesizerProtocol[SymbolicStateT, ActionT],
-        config: LearningConfig,
+        non_creation_expert_manager: ExpertManager[SymbolicStateT, ActionT],
+        creation_expert_manager: ExpertManager[SymbolicStateT, ActionT],
+        non_creation_synthesizer: ExpertSynthesizerProtocol[SymbolicStateT],
+        creation_synthesizer: ExpertSynthesizerProtocol[SymbolicStateT],
+        config: ObjectModelOrchestratorConfig,
         checkpoint_dir: str = "checkpoints",
     ):
         """

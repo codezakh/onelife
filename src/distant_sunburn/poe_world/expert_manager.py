@@ -22,19 +22,8 @@ ActionT = TypeVar("ActionT")
 
 class ExpertManager(Generic[SymbolicStateT, ActionT]):
     """
-    Expert Manager that implements ExpertManagerProtocol by coordinating
-    MaxLikelihoodWeightFitter and PoEWorldModel components.
-
-    This class wraps the existing weight fitting and world model components
-    to provide the interface required by ObjectModelOrchestrator. It handles:
-    - Expert addition and management
-    - Weight fitting with support for fast mode
-    - Expert pruning based on weight thresholds
-    - Checkpointing using safetensors
-    - Log probability evaluation
-
-    The implementation follows the design outlined in the issue document,
-    using immutable updates and tracking expert fitting state.
+    Coordinates a a world model and an optimizer for the world model to fit a
+    and manage a set of experts.
     """
 
     def __init__(

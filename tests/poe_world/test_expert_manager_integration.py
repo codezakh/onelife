@@ -13,8 +13,7 @@ from distant_sunburn.poe_world.core import SymbolicTransition, WeightedExpert
 from distant_sunburn.poe_world.expert_manager import ExpertManager
 from distant_sunburn.poe_world.object_model_learner import (
     ObjectModelOrchestrator,
-    LearningConfig,
-    ExpertManagerProtocol,
+    ObjectModelOrchestratorConfig,
 )
 from distant_sunburn.poe_world.weight_fitter import MaxLikelihoodWeightFitter
 from distant_sunburn.poe_world.simple_1d_env.observable_extractor import (
@@ -118,7 +117,7 @@ def test_expert_manager_with_orchestrator(tmp_path: Path):
     creation_synthesizer = MockExpertSynthesizer(creation_experts)
 
     # Create learning config
-    config = LearningConfig(
+    config = ObjectModelOrchestratorConfig(
         batch_size=5,
         save_freq=20,
         surprise_threshold=-1.0,  # Lower threshold to trigger synthesis
@@ -205,7 +204,7 @@ def test_fast_inference_with_expert_manager(tmp_path):
     )
 
     # Create learning config
-    config = LearningConfig(
+    config = ObjectModelOrchestratorConfig(
         batch_size=3,
         save_freq=10,
         surprise_threshold=-1.0,
