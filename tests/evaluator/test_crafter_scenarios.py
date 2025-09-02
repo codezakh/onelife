@@ -13,6 +13,8 @@ from distant_sunburn.evaluator.crafter.scenarios import (
     EatCowScenario,
     CollectCoalScenario,
     UnsuccessfulCollectCoalScenario,
+    CollectDiamondScenario,
+    UnsuccessfulCollectDiamondScenario,
 )
 from distant_sunburn.evaluator.crafter.scenarios import run_scenarios
 
@@ -142,3 +144,31 @@ def test_unsuccessful_collect_coal_scenario():
     assert results[
         0
     ].goal_test, "Coal should not be collected during coal collect scenario"
+
+
+def test_collect_diamond_scenario():
+    """Test that the diamond collect scenario results in the diamond being collected."""
+    # Arrange
+    scenario = CollectDiamondScenario()
+
+    # Act
+    results = run_scenarios([scenario])
+
+    # Assert - Verify the goal test succeeded (diamond collected)
+    assert results[
+        0
+    ].goal_test, "Diamond should be collected during diamond collect scenario"
+
+
+def test_unsuccessful_collect_diamond_scenario():
+    """Test that the diamond collect scenario results in the diamond being collected."""
+    # Arrange
+    scenario = UnsuccessfulCollectDiamondScenario()
+
+    # Act
+    results = run_scenarios([scenario])
+
+    # Assert - Verify the goal test succeeded (diamond not collected)
+    assert results[
+        0
+    ].goal_test, "Diamond should not be collected during diamond collect scenario"
