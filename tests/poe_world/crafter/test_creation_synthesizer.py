@@ -23,6 +23,7 @@ from distant_sunburn.poe_world.crafter.creation_synthesizer import (
 from distant_sunburn.poe_world.core import (
     SymbolicTransition,
 )
+from loguru import logger
 
 
 @pytest.mark.asyncio
@@ -144,10 +145,11 @@ async def test_zombie_defeat_transition():
         prev_metadata=initial_state, action="do", next_metadata=next_state
     )
 
-    # Test that the synthesizer can generate experts for zombie defeat
-    experts = await synthesizer.synthesize_experts(
-        transitions=[transition], object_type="zombie"
-    )
+    with logger.contextualize(object_type="zombie"):
+        # Test that the synthesizer can generate experts for zombie defeat
+        experts = await synthesizer.synthesize_experts(
+            transitions=[transition], object_type="zombie"
+        )
 
     # Should generate at least one expert for zombie defeat
     assert len(experts) >= 1, "Should generate experts for zombie defeat transition"
