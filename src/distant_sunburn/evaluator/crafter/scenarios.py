@@ -30,6 +30,33 @@ import random
 import functools
 from typing import Sequence
 from crafter.constants import ActionT as CrafterAction
+from crafter.constants import MaterialT
+from crafter import objects as crafter_objects
+from crafter import engine as crafter_engine
+
+
+def create_crafting_scenario_base_state(
+    target_material: MaterialT,
+) -> tuple[crafter_engine.World, crafter_objects.Player, tuple[int, int]]:
+    view = (9, 9)
+    state = initial_state(area=(9, 9), view=view, seed=1)
+    world = reconstruct_world_from_state(state)
+
+    player = find_player(world)
+    player_utils.set_player_position(player, (5, 5))
+
+    # Clear all the other tiles around the world to be grass
+    for x in range(view[0]):
+        for y in range(view[1]):
+            world_utils.set_tile_material(world, (x, y), "grass")
+
+    # Set the tile to the right of the player to the target material
+    world_utils.set_tile_material(world, (6, 5), target_material)
+
+    # Make the player face the target material
+    player_utils.set_player_facing(player, (1, 0))
+
+    return world, player, view
 
 
 @dataclass
@@ -654,26 +681,10 @@ class CollectCoalScenario:
         return "collect_coal"
 
     def get_initial_state(self) -> WorldState:
-        view = (9, 9)
-        state = initial_state(area=(9, 9), view=view, seed=1)
-        world = reconstruct_world_from_state(state)
-
-        player = find_player(world)
-        player_utils.set_player_position(player, (5, 5))
-
-        # Clear all the other tiles around the world to be grass
-        for x in range(view[0]):
-            for y in range(view[1]):
-                world_utils.set_tile_material(world, (x, y), "grass")
-
-        # Set the tile to the right of the player to coal
-        world_utils.set_tile_material(world, (6, 5), "coal")
+        world, player, view = create_crafting_scenario_base_state("coal")
 
         # Give the player a wood pickaxe
         player_utils.set_player_inventory_item(player, "wood_pickaxe", 1)
-
-        # Make the player face the coal
-        player_utils.set_player_facing(player, (1, 0))
 
         state = export_world_state(world, view=view, step_count=0)
         return state
@@ -706,28 +717,12 @@ class UnsuccessfulCollectCoalScenario:
         return "collect_coal"
 
     def get_initial_state(self) -> WorldState:
-        view = (9, 9)
-        state = initial_state(area=(9, 9), view=view, seed=1)
-        world = reconstruct_world_from_state(state)
-
-        player = find_player(world)
-        player_utils.set_player_position(player, (5, 5))
-
-        # Clear all the other tiles around the world to be grass
-        for x in range(view[0]):
-            for y in range(view[1]):
-                world_utils.set_tile_material(world, (x, y), "grass")
-
-        # Set the tile to the right of the player to coal
-        world_utils.set_tile_material(world, (6, 5), "coal")
+        world, player, view = create_crafting_scenario_base_state("coal")
 
         # Make sure a player has no pickaxe strong enough to collect the coal
         player_utils.set_player_inventory_item(player, "wood_pickaxe", 0)
         player_utils.set_player_inventory_item(player, "stone_pickaxe", 0)
         player_utils.set_player_inventory_item(player, "iron_pickaxe", 0)
-
-        # Make the player face the coal
-        player_utils.set_player_facing(player, (1, 0))
 
         state = export_world_state(world, view=view, step_count=0)
         return state
@@ -760,26 +755,10 @@ class CollectDiamondScenario:
         return "collect_diamond"
 
     def get_initial_state(self) -> WorldState:
-        view = (9, 9)
-        state = initial_state(area=(9, 9), view=view, seed=1)
-        world = reconstruct_world_from_state(state)
-
-        player = find_player(world)
-        player_utils.set_player_position(player, (5, 5))
-
-        # Clear all the other tiles around the world to be grass
-        for x in range(view[0]):
-            for y in range(view[1]):
-                world_utils.set_tile_material(world, (x, y), "grass")
-
-        # Set the tile to the right of the player to coal
-        world_utils.set_tile_material(world, (6, 5), "diamond")
+        world, player, view = create_crafting_scenario_base_state("diamond")
 
         # Give the player an iron pickaxe
         player_utils.set_player_inventory_item(player, "iron_pickaxe", 1)
-
-        # Make the player face the diamond
-        player_utils.set_player_facing(player, (1, 0))
 
         state = export_world_state(world, view=view, step_count=0)
         return state
@@ -809,28 +788,12 @@ class UnsuccessfulCollectDiamondScenario:
         return "collect_diamond"
 
     def get_initial_state(self) -> WorldState:
-        view = (9, 9)
-        state = initial_state(area=(9, 9), view=view, seed=1)
-        world = reconstruct_world_from_state(state)
-
-        player = find_player(world)
-        player_utils.set_player_position(player, (5, 5))
-
-        # Clear all the other tiles around the world to be grass
-        for x in range(view[0]):
-            for y in range(view[1]):
-                world_utils.set_tile_material(world, (x, y), "grass")
-
-        # Set the tile to the right of the player to diamond
-        world_utils.set_tile_material(world, (6, 5), "diamond")
+        world, player, view = create_crafting_scenario_base_state("diamond")
 
         # Make sure a player has no pickaxe strong enough to collect the diamond
         player_utils.set_player_inventory_item(player, "wood_pickaxe", 1)
         player_utils.set_player_inventory_item(player, "stone_pickaxe", 1)
         player_utils.set_player_inventory_item(player, "iron_pickaxe", 0)
-
-        # Make the player face the diamond
-        player_utils.set_player_facing(player, (1, 0))
 
         state = export_world_state(world, view=view, step_count=0)
         return state
