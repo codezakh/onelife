@@ -11,6 +11,7 @@ from distant_sunburn.evaluator.crafter.scenarios import (
     ZombieDefeatScenario,
     DefeatSkeletonScenario,
     EatCowScenario,
+    CollectCoalScenario,
 )
 from distant_sunburn.evaluator.crafter.scenarios import run_scenarios
 
@@ -114,3 +115,15 @@ def test_eat_cow_scenario():
 
     # Assert - Verify the goal test succeeded (cow eaten)
     assert results[0].goal_test, "Cow should be eaten during cow eat scenario"
+
+
+def test_collect_coal_scenario():
+    """Test that the coal collect scenario results in the coal being collected."""
+    # Arrange
+    scenario = CollectCoalScenario()
+
+    # Act
+    results = run_scenarios([scenario])
+
+    # Assert - Verify the goal test succeeded (coal collected)
+    assert results[0].goal_test, "Coal should be collected during coal collect scenario"
