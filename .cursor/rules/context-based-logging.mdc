@@ -4,10 +4,10 @@ globs:
 alwaysApply: false
 ---
 # Context-Based Logging with Loguru
-The `distant_sunburn` codebase uses Loguru with automatic extras support. You can bind contextual information to your logger and have it automatically displayed in all log messages.
+The `distant_sunburn` codebase uses Loguru with automatic extras support. You can bind contextual information to your logger and have it automatically displayed in all log messages. The logger has been set up for you already, and you can directly import it as `logger` from `loguru`.
 
 ```python
-from distant_sunburn import logger
+from loguru import logger
 
 # Bind context information
 logger = logger.bind(ip="192.168.1.1", user="john_doe")
@@ -17,6 +17,8 @@ logger.info("User logged in successfully")
 For usage in classes, assign the bound logger to the class and use it thereafter.
 Example:
 ```python
+from loguru import logger
+
 class MyClass:
     def __init__(self, some_important_metadata: str):
         self.logger = logger.bind(well_chosen_name=some_important_metadata)
@@ -25,9 +27,42 @@ class MyClass:
         self.logger.info("Doing thing") # will include "well_chosen_name=some_important_metadata" in the log message
 ```
 
+You _must_ ensure that any complex data structures are well-formatted before binding to the logger.
 
-## Best Practices
-1. **Bind early**: Bind context as soon as you have it (e.g., at request start)
-2. **Use descriptive names**: Choose clear, meaningful field names
-3. **Consistent patterns**: Use similar field names across your codebase
-4. **Don't over-bind**: Only bind information that's actually useful for debugging/monitoring
+**BAD**:
+```python
+foo = {{{{...}}}} # complex data structure
+logger = logger.bind(foo=foo)
+```
+
+**GOOD**:
+```python
+foo = {{{{{...}}}}} # complex data structure
+formatted: str = # pick elements of foo to show as a string
+logger = logger.bind(foo=formatted)
+```
+
+Another pattern you can use is:
+```python
+from loguru import logger
+
+with logger.contextualize(foo=foo):
+    logger.info("Doing thing")
+```
+
+This is useful when you want to bind for a short period of time.
+
+## Guidelines
+1. Do not create and assign too many bound loggers.
+2. If assigning a logger using `self.logger = logger.bind(...)`, do so in the `__init__` method of the class or _very sparingly_ in other dedicated methods for logging. _AVOID_ doing this dynamically in other methods.
+3. Do not pass around loggers as arguments to functions.
+4. Use `logger.contextualize(...)` for short-term bindings rather than assigning a logger to a class attribute.
+
+
+# Common Mistakes
+## Passing in arguments that have no format placeholders
+```python
+from loguru import logger
+
+logger.info("This is a log message", foo="bar") # Will not be formatted
+```
