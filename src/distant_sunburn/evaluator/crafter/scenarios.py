@@ -395,6 +395,122 @@ class DefeatSkeletonScenario:
 implements(Scenario)(DefeatSkeletonScenario)
 
 
+class EatCowScenario:
+    def __init__(self, max_steps: int = 15):
+        self.max_steps = max_steps
+        self.target_cow: Optional[CowState] = None
+        self.logger = logger.bind(scenario="eat_cow")
+
+    @property
+    def name(self) -> str:
+        return "eat_cow"
+
+    def get_initial_state(self) -> WorldState:
+        view = (9, 9)
+        state = initial_state(area=(9, 9), view=view, seed=1)
+        world = reconstruct_world_from_state(state)
+
+        player = find_player(world)
+        player_utils.set_player_position(player, (5, 5))
+
+        # Clear all the other tiles around the world to be grass
+        for x in range(view[0]):
+            for y in range(view[1]):
+                world_utils.set_tile_material(world, (x, y), "grass")
+
+        # Add a cow to the right of the player
+        cow = objects.Cow(world, (6, 5))
+        world.add(cow)
+
+        # Make the player face the cow
+        player_utils.set_player_facing(player, (1, 0))
+
+        state = export_world_state(world, view=view, step_count=0)
+        # Find the cow's entity id
+        self.target_cow = find_object_in_state(
+            state,
+            entity_id=cow.entity_id,
+            entity_type=CowState,
+        )
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        # Find the target cow
+        assert self.target_cow is not None
+        target_cow = find_object_in_state(
+            state,
+            entity_id=self.target_cow.entity_id,
+            entity_type=CowState,
+        )
+
+        if target_cow is None:
+            self.logger.warning("No skeleton found to attack")
+            return "noop"
+
+        self.logger.debug(f"Target cow: {target_cow}")
+
+        player = state.player
+
+        # Check if cow is adjacent
+        distance = player.distance(target_cow.position)
+
+        if distance == 1:
+            # Adjacent - check if facing the cow
+            if player.facing + player.position == target_cow.position:
+                self.logger.debug("Facing cow - attacking")
+                return "do"  # Attack
+            else:
+                self.logger.debug("Not facing cow - turning towards")
+                # Turn towards cow
+                direction = player.toward(target_cow.position)
+                if direction[0] == -1:
+                    return "move_left"
+                elif direction[0] == 1:
+                    return "move_right"
+                elif direction[1] == -1:
+                    return "move_up"
+                else:  # direction[1] == 1
+                    return "move_down"
+        else:
+            self.logger.debug("Not adjacent - moving towards cow")
+            # Not adjacent - move towards cow
+            direction = player.toward(target_cow.position)
+            if direction[0] == -1:
+                return "move_left"
+            elif direction[0] == 1:
+                return "move_right"
+            elif direction[1] == -1:
+                return "move_up"
+            else:  # direction[1] == 1
+                return "move_down"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+        assert self.target_cow is not None
+        cow = find_object_in_state(
+            transitions[-1].next_metadata,
+            entity_id=self.target_cow.entity_id,
+            entity_type=CowState,
+        )
+
+        cow_present: list[CowState | None] = []
+        for t in transitions:
+            cow = find_object_in_state(
+                t.next_metadata,
+                entity_id=self.target_cow.entity_id,
+                entity_type=CowState,
+            )
+            cow_present.append(cow)
+
+        if (final_cow := cow_present[-1]) is not None:
+            return GoalChecked(
+                False,
+                f"Cow(entity_id={final_cow.entity_id}, health={final_cow.health}) not eaten",
+            )
+        return GoalChecked(True, "Cow eaten")
+
+
 class CowMovementScenario:
     """Scenario for testing cow movement behavior."""
 
