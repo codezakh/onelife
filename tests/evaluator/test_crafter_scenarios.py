@@ -23,47 +23,41 @@ class TestScenarioRunner:
         assert results[0].transitions[0].next_metadata.step_count == 1
 
 
-class TestCraftWoodenPickaxeScenario:
-    """Test the wooden pickaxe crafting scenario."""
+def test_craft_wooden_pickaxe_scenario():
+    """Test that running the scenario results in a wooden pickaxe being crafted."""
+    # Arrange
+    scenario = CraftWoodenPickaxeScenario()
 
-    def test_scenario_creates_wooden_pickaxe(self):
-        """Test that running the scenario results in a wooden pickaxe being crafted."""
-        # Arrange
-        scenario = CraftWoodenPickaxeScenario()
+    # Act - Get initial state and run the scenario
+    initial_state = scenario.get_initial_state()
 
-        # Act - Get initial state and run the scenario
-        initial_state = scenario.get_initial_state()
+    # Verify initial state doesn't have pickaxe
+    assert (
+        initial_state.player.inventory.wood_pickaxe == 0
+    ), "Should not have pickaxe initially"
 
-        # Verify initial state doesn't have pickaxe
-        assert (
-            initial_state.player.inventory.wood_pickaxe == 0
-        ), "Should not have pickaxe initially"
+    results = run_scenarios([scenario])
 
-        results = run_scenarios([scenario])
-
-        # Verify the goal test succeeded
-        assert results[0].goal_test
+    # Verify the goal test succeeded
+    assert results[0].goal_test
 
 
-class TestCowMovementScenario:
-    """Test the cow movement scenario."""
+def test_cow_movement_scenario():
+    """Test that the scenario creates a world with a cow present."""
+    # Arrange
+    scenario = CowMovementScenario()
 
-    def test_scenario_has_cow_in_world(self):
-        """Test that the scenario creates a world with a cow present."""
-        # Arrange
-        scenario = CowMovementScenario()
+    # Act
+    initial_state = scenario.get_initial_state()
 
-        # Act
-        initial_state = scenario.get_initial_state()
+    # Assert - Verify there's a cow in the world
+    cows = [obj for obj in initial_state.objects if obj.name == "cow"]
+    assert len(cows) == 1
 
-        # Assert - Verify there's a cow in the world
-        cows = [obj for obj in initial_state.objects if obj.name == "cow"]
-        assert len(cows) == 1
+    results = run_scenarios([scenario])
 
-        results = run_scenarios([scenario])
-
-        # Verify the goal test succeeded
-        assert results[0].goal_test
+    # Verify the goal test succeeded
+    assert results[0].goal_test
 
 
 def test_random_movement_scenario():
