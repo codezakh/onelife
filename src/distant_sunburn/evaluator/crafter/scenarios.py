@@ -8,7 +8,7 @@ from crafter.functional_env import (
     reconstruct_world_from_state,
     export_world_state,
 )
-from crafter.state_export import WorldState
+from crafter.state_export import WorldState, ZombieState
 from crafter.constants import ActionT
 from .utils import find_player, find_all_objects_for_type, find_object_in_state
 from crafter.testing_helpers import (
@@ -197,6 +197,83 @@ class CraftWoodenPickaxeScenario:
 
 
 implements(Scenario)(CraftWoodenPickaxeScenario)
+
+
+class ZombieDefeatScenario:
+    def __init__(self, max_steps: int = 5):
+        self.target_zombie_id: Optional[int] = None
+        self.max_steps = max_steps
+
+    @property
+    def name(self) -> str:
+        return "zombie_defeat"
+
+    def get_initial_state(self) -> WorldState:
+        view = (9, 9)
+        state = initial_state(area=(9, 9), view=view, seed=1)
+        world = reconstruct_world_from_state(state)
+
+        # Clear all the other tiles around the world to be grass
+        for x in range(view[0]):
+            for y in range(view[1]):
+                world_utils.set_tile_material(world, (x, y), "grass")
+
+        player = find_player(world)
+        player_utils.set_player_position(player, (5, 5))
+
+        # Clear all entities from the world (except the player)
+        for obj in world.objects:
+            if isinstance(obj, objects.Player):
+                continue
+            world.remove(obj)
+
+        # Add a zombie to the right of the player
+        zombie = objects.Zombie(world, (6, 5), player)
+        world.add(zombie)
+
+        self.target_zombie = zombie
+
+        # Make the player face the zombie
+        player_utils.set_player_facing(player, (1, 0))
+
+        state = export_world_state(world, view=view, step_count=0)
+        # Find the zombie's entity id
+        self.target_zombie = find_object_in_state(
+            state,
+            entity_id=zombie.entity_id,
+            entity_type=ZombieState,
+        )
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        return "do"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+
+        assert self.target_zombie is not None
+
+        zombie_present: list[ZombieState | None] = []
+
+        for t in transitions:
+            zombie = find_object_in_state(
+                t.next_metadata,
+                entity_id=self.target_zombie.entity_id,
+                entity_type=ZombieState,
+            )
+            zombie_present.append(zombie)
+
+        if (final_zombie := zombie_present[-1]) is not None:
+            return GoalChecked(
+                False,
+                f"Zombie(entity_id={final_zombie.entity_id}, health={final_zombie.health}) not defeated",
+            )
+
+        return GoalChecked(True, "Zombie defeated")
+
+
+implements(Scenario)(ZombieDefeatScenario)
 
 
 class CowMovementScenario:
