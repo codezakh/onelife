@@ -721,7 +721,7 @@ class UnsuccessfulCollectCoalScenario:
         # Set the tile to the right of the player to coal
         world_utils.set_tile_material(world, (6, 5), "coal")
 
-        # Make sure a player has no pickaxe
+        # Make sure a player has no pickaxe strong enough to collect the coal
         player_utils.set_player_inventory_item(player, "wood_pickaxe", 0)
         player_utils.set_player_inventory_item(player, "stone_pickaxe", 0)
         player_utils.set_player_inventory_item(player, "iron_pickaxe", 0)
@@ -824,9 +824,9 @@ class UnsuccessfulCollectDiamondScenario:
         # Set the tile to the right of the player to diamond
         world_utils.set_tile_material(world, (6, 5), "diamond")
 
-        # Make sure a player has no pickaxe
-        player_utils.set_player_inventory_item(player, "wood_pickaxe", 0)
-        player_utils.set_player_inventory_item(player, "stone_pickaxe", 0)
+        # Make sure a player has no pickaxe strong enough to collect the diamond
+        player_utils.set_player_inventory_item(player, "wood_pickaxe", 1)
+        player_utils.set_player_inventory_item(player, "stone_pickaxe", 1)
         player_utils.set_player_inventory_item(player, "iron_pickaxe", 0)
 
         # Make the player face the diamond
