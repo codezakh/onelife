@@ -3,13 +3,15 @@ Scenario definitions for Crafter evaluation.
 """
 
 import copy
+from typing_extensions import assert_never
+import numpy as np
 from loguru import logger
 from typing import Protocol, Callable, TypeVar, cast
 from crafter.functional_env import (
     reconstruct_world_from_state,
     export_world_state,
 )
-from crafter.state_export import WorldState, ZombieState, SkeletonState
+from crafter.state_export import WorldState, ZombieState, SkeletonState, PlantState
 from crafter.constants import ActionT
 from .utils import find_player, find_all_objects_for_type, find_object_in_state
 from crafter.testing_helpers import (
@@ -1001,3 +1003,133 @@ class CollectWoodScenario:
         if next_state.player.inventory.wood == 1:
             return GoalChecked(True, "Wood collected")
         return GoalChecked(False, "Wood not collected")
+
+
+class EatPlantScenario:
+    def __init__(self, max_steps: int = 1):
+        self.max_steps = max_steps
+        self.target_plant: Optional[PlantState] = None
+
+    @property
+    def name(self) -> str:
+        return "eat_plant"
+
+    def get_initial_state(self) -> WorldState:
+        world, player, view = create_collection_scenario_base_state("grass")
+
+        # Add a plant to the right of the player
+        plant = objects.Plant(world, player.pos + np.array([1, 0]))
+        plant.grown = 301  # Make it ripe
+        world.add(plant)
+
+        # Ensure the player has no food
+        player_utils.set_player_inventory_item(player, "food", 0)
+
+        state = export_world_state(world, view=view, step_count=0)
+        self.target_plant = find_object_in_state(
+            state,
+            entity_id=plant.entity_id,
+            entity_type=PlantState,
+        )
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        return "do"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+        first_transition = transitions[0]
+        next_state = first_transition.next_metadata
+        food_collected = next_state.player.inventory.food == 4
+        assert self.target_plant is not None
+        plant = find_object_in_state(
+            next_state,
+            entity_id=self.target_plant.entity_id,
+            entity_type=PlantState,
+        )
+        assert plant is not None
+        plant_reset = plant.grown == 1
+
+        match (food_collected, plant_reset):
+            case (True, True):
+                return GoalChecked(True, "Food collected and plant reset")
+            case (True, False):
+                return GoalChecked(False, "Food collected but plant not reset")
+            case (False, True):
+                return GoalChecked(False, "Food not collected but plant reset")
+            case (False, False):
+                return GoalChecked(False, "Food not collected and plant not reset")
+            case _:
+                assert_never(food_collected, plant_reset)
+
+
+class UnsuccessfulEatPlantScenario:
+    def __init__(self, max_steps: int = 1):
+        self.max_steps = max_steps
+        self.target_plant: Optional[PlantState] = None
+
+    @property
+    def name(self) -> str:
+        return "eat_plant"
+
+    def get_initial_state(self) -> WorldState:
+        world, player, view = create_collection_scenario_base_state("grass")
+
+        # Add a plant to the right of the player
+        plant = objects.Plant(world, player.pos + np.array([1, 0]))
+        plant.grown = 100  # Make it not ripe
+        world.add(plant)
+
+        # Ensure the player has no food
+        player_utils.set_player_inventory_item(player, "food", 0)
+
+        state = export_world_state(world, view=view, step_count=0)
+        self.target_plant = find_object_in_state(
+            state,
+            entity_id=plant.entity_id,
+            entity_type=PlantState,
+        )
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        return "do"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+        first_transition = transitions[0]
+        next_state = first_transition.next_metadata
+        food_collected = next_state.player.inventory.food == 4
+        assert self.target_plant is not None
+        plant = find_object_in_state(
+            next_state,
+            entity_id=self.target_plant.entity_id,
+            entity_type=PlantState,
+        )
+        assert plant is not None
+
+        plant_reset = plant.grown == 1
+
+        match (food_collected, plant_reset):
+            case (True, True):
+                return GoalChecked(
+                    False, "Food collected and plant reset, indicating successful eat"
+                )
+            case (True, False):
+                return GoalChecked(
+                    False,
+                    "Food collected but plant not reset, indicating unsuccessful eat",
+                )
+            case (False, True):
+                return GoalChecked(
+                    False,
+                    "Food not collected but plant reset, indicating unsuccessful eat",
+                )
+            case (False, False):
+                return GoalChecked(
+                    True,
+                    "Food not collected and plant not reset, indicating unsuccessful eat",
+                )
+            case _:
+                assert_never(food_collected, plant_reset)
