@@ -3,12 +3,13 @@ Scenario definitions for Crafter evaluation.
 """
 
 import copy
+from loguru import logger
 from typing import Protocol, Callable, TypeVar, cast
 from crafter.functional_env import (
     reconstruct_world_from_state,
     export_world_state,
 )
-from crafter.state_export import WorldState, ZombieState
+from crafter.state_export import WorldState, ZombieState, SkeletonState
 from crafter.constants import ActionT
 from .utils import find_player, find_all_objects_for_type, find_object_in_state
 from crafter.testing_helpers import (
@@ -201,7 +202,7 @@ implements(Scenario)(CraftWoodenPickaxeScenario)
 
 class ZombieDefeatScenario:
     def __init__(self, max_steps: int = 5):
-        self.target_zombie_id: Optional[int] = None
+        self.target_zombie: Optional[ZombieState] = None
         self.max_steps = max_steps
 
     @property
@@ -230,8 +231,6 @@ class ZombieDefeatScenario:
         # Add a zombie to the right of the player
         zombie = objects.Zombie(world, (6, 5), player)
         world.add(zombie)
-
-        self.target_zombie = zombie
 
         # Make the player face the zombie
         player_utils.set_player_facing(player, (1, 0))
@@ -274,6 +273,126 @@ class ZombieDefeatScenario:
 
 
 implements(Scenario)(ZombieDefeatScenario)
+
+
+class DefeatSkeletonScenario:
+    def __init__(self, max_steps: int = 10):
+        self.max_steps = max_steps
+        self.target_skeleton: Optional[SkeletonState] = None
+        self.logger = logger.bind(scenario="defeat_skeleton")
+
+    @property
+    def name(self) -> str:
+        return "defeat_skeleton"
+
+    def get_initial_state(self) -> WorldState:
+        view = (9, 9)
+        state = initial_state(area=(9, 9), view=view, seed=1)
+        world = reconstruct_world_from_state(state)
+
+        player = find_player(world)
+        player_utils.set_player_position(player, (5, 5))
+
+        # Clear all the other tiles around the world to be grass
+        for x in range(view[0]):
+            for y in range(view[1]):
+                world_utils.set_tile_material(world, (x, y), "grass")
+
+        # Add a skeleton to the right of the player
+        skeleton = objects.Skeleton(world, (6, 5), player)
+        world.add(skeleton)
+
+        # Make the player face the skeleton
+        player_utils.set_player_facing(player, (1, 0))
+
+        state = export_world_state(world, view=view, step_count=0)
+        # Find the skeleton's entity id
+        self.target_skeleton = find_object_in_state(
+            state,
+            entity_id=skeleton.entity_id,
+            entity_type=SkeletonState,
+        )
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        # Find the target skeleton
+        assert self.target_skeleton is not None
+        target_skeleton = find_object_in_state(
+            state,
+            entity_id=self.target_skeleton.entity_id,
+            entity_type=SkeletonState,
+        )
+
+        if target_skeleton is None:
+            self.logger.warning("No skeleton found to attack")
+            return "noop"
+
+        self.logger.debug(f"Target skeleton: {target_skeleton}")
+
+        player = state.player
+
+        # Check if skeleton is adjacent
+        distance = player.distance(target_skeleton.position)
+
+        if distance == 1:
+            # Adjacent - check if facing the skeleton
+            if player.facing + player.position == target_skeleton.position:
+                self.logger.debug("Facing skeleton - attacking")
+                return "do"  # Attack
+            else:
+                self.logger.debug("Not facing skeleton - turning towards")
+                # Turn towards skeleton
+                direction = player.toward(target_skeleton.position)
+                if direction[0] == -1:
+                    return "move_left"
+                elif direction[0] == 1:
+                    return "move_right"
+                elif direction[1] == -1:
+                    return "move_up"
+                else:  # direction[1] == 1
+                    return "move_down"
+        else:
+            self.logger.debug("Not adjacent - moving towards skeleton")
+            # Not adjacent - move towards skeleton
+            direction = player.toward(target_skeleton.position)
+            if direction[0] == -1:
+                return "move_left"
+            elif direction[0] == 1:
+                return "move_right"
+            elif direction[1] == -1:
+                return "move_up"
+            else:  # direction[1] == 1
+                return "move_down"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+        assert self.target_skeleton is not None
+        skeleton = find_object_in_state(
+            transitions[-1].next_metadata,
+            entity_id=self.target_skeleton.entity_id,
+            entity_type=SkeletonState,
+        )
+
+        skeleton_present: list[SkeletonState | None] = []
+
+        for t in transitions:
+            skeleton = find_object_in_state(
+                t.next_metadata,
+                entity_id=self.target_skeleton.entity_id,
+                entity_type=SkeletonState,
+            )
+            skeleton_present.append(skeleton)
+
+        if (final_skeleton := skeleton_present[-1]) is not None:
+            return GoalChecked(
+                False,
+                f"Skeleton(entity_id={final_skeleton.entity_id}, health={final_skeleton.health}) not defeated",
+            )
+        return GoalChecked(True, "Skeleton defeated")
+
+
+implements(Scenario)(DefeatSkeletonScenario)
 
 
 class CowMovementScenario:

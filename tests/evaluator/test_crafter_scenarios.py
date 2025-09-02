@@ -9,6 +9,7 @@ from distant_sunburn.evaluator.crafter.scenarios import (
     CowMovementScenario,
     RandomMovementScenario,
     ZombieDefeatScenario,
+    DefeatSkeletonScenario,
 )
 from distant_sunburn.evaluator.crafter.scenarios import run_scenarios
 
@@ -86,3 +87,17 @@ def test_zombie_defeat_scenario():
     assert results[
         0
     ].goal_test, "Zombie should be defeated during zombie defeat scenario"
+
+
+def test_defeat_skeleton_scenario():
+    """Test that the skeleton defeat scenario results in the skeleton being defeated."""
+    # Arrange
+    scenario = DefeatSkeletonScenario(max_steps=10)
+
+    # Act
+    results = run_scenarios([scenario])
+
+    # Assert - Verify the goal test succeeded (skeleton defeated)
+    assert results[
+        0
+    ].goal_test, "Skeleton should be defeated during skeleton defeat scenario"
