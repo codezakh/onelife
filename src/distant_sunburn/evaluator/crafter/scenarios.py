@@ -1430,3 +1430,66 @@ class UnsuccessfulCraftStoneSwordScenario:
 
 
 implements(Scenario)(UnsuccessfulCraftStoneSwordScenario)
+
+
+class CraftWoodenPickaxeScenario:
+    def __init__(self, max_steps: int = 1):
+        self.max_steps = max_steps
+
+    @property
+    def name(self) -> str:
+        return "craft_wooden_pickaxe"
+
+    def get_initial_state(self) -> WorldState:
+        world, player, view = create_collection_scenario_base_state("table")
+
+        # Set the player to have the required resources
+        player_utils.set_player_inventory_item(player, "wood", 1)
+
+        state = export_world_state(world, view=view, step_count=0)
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        return "make_wood_pickaxe"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+        first_transition = transitions[0]
+        next_state = first_transition.next_metadata
+        if next_state.player.inventory.wood_pickaxe == 1:
+            return GoalChecked(True, "Wooden pickaxe crafted")
+        return GoalChecked(False, "Wooden pickaxe not crafted")
+
+
+implements(Scenario)(CraftWoodenPickaxeScenario)
+
+
+class UnsuccessfulCraftWoodenPickaxeScenario:
+    def __init__(self, max_steps: int = 1):
+        self.max_steps = max_steps
+
+    @property
+    def name(self) -> str:
+        return "craft_wooden_pickaxe"
+
+    def get_initial_state(self) -> WorldState:
+        world, player, view = create_collection_scenario_base_state("table")
+
+        # Ensure the player is missing a required resource
+        player_utils.set_player_inventory_item(player, "wood", 0)
+
+        state = export_world_state(world, view=view, step_count=0)
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        return "make_wood_pickaxe"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+        first_transition = transitions[0]
+        next_state = first_transition.next_metadata
+        if next_state.player.inventory.wood_pickaxe == 1:
+            return GoalChecked(False, "Wooden pickaxe crafted")
+        return GoalChecked(True, "Wooden pickaxe not crafted")

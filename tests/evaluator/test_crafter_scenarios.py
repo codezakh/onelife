@@ -263,6 +263,10 @@ class TestScenarioRunner:
         scenarios.UnsuccessfulCraftIronSwordScenario,
         scenarios.CraftStonePickaxeScenario,
         scenarios.UnsuccessfulCraftStonePickaxeScenario,
+        scenarios.CraftStoneSwordScenario,
+        scenarios.UnsuccessfulCraftStoneSwordScenario,
+        scenarios.CraftWoodenPickaxeScenario,
+        scenarios.UnsuccessfulCraftWoodenPickaxeScenario,
     ],
 )
 def test_collection_scenario(scenario_cls: Type[Scenario]):
