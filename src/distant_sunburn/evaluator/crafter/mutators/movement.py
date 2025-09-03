@@ -54,3 +54,6 @@ class IllegalMovementMutator:
         mutated_state.player.position += mutated_state.player.facing
 
         return mutated_state
+
+
+implements(Mutator)(IllegalMovementMutator)
