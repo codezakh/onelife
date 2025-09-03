@@ -277,6 +277,7 @@ class TestScenarioRunner:
         scenarios.UnsuccessfulPlaceStoneScenario,
         scenarios.PlaceTableScenario,
         scenarios.UnsuccessfulPlaceTableScenario,
+        scenarios.WakeUpScenario,
     ],
 )
 def test_collection_scenario(scenario_cls: Type[Scenario]):

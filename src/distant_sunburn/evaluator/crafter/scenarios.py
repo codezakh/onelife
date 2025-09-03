@@ -35,6 +35,7 @@ from crafter.constants import ActionT as CrafterAction
 from crafter.constants import MaterialT, CraftingStationT
 from crafter import objects as crafter_objects
 from crafter import engine as crafter_engine
+from crafter import constants as crafter_constants
 
 
 def create_collection_scenario_base_state(
@@ -1852,3 +1853,70 @@ class UnsuccessfulPlaceTableScenario:
 
 
 implements(Scenario)(UnsuccessfulPlaceTableScenario)
+
+
+class WakeUpScenario:
+    def __init__(self):
+        self.max_steps = 12
+        self.logger = logger.bind(scenario="wake_up")
+
+    @property
+    def name(self) -> str:
+        return "wake_up"
+
+    def get_initial_state(self) -> WorldState:
+        world, player, view = create_collection_scenario_base_state("grass")
+
+        # One sleep cycle will be completed once fatigue reaches -10
+        player_utils.set_player_internal_stat(player, "_fatigue", 0)
+        # Each sleep cycle will restore +1 energy
+        # Player will wake up when max energy is reached
+        # We're setting it up so that one sleep cycle will result in waking up
+        player_utils.set_player_inventory_item(
+            player, "energy", crafter_constants.items["energy"]["max"] - 1
+        )
+
+        state = export_world_state(world, view=view, step_count=0)
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        self.logger.info(
+            {
+                "step_count": state.step_count,
+                "energy": state.player.inventory.energy,
+                "sleeping": state.player.sleeping,
+                "fatigue": state.player.fatigue,
+            }
+        )
+        return "sleep"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+        if len(transitions) < 2:
+            return GoalChecked(
+                False, f"Need to take at least 2 steps, took {len(transitions)}"
+            )
+        first_transition, *_, last_transition = transitions
+
+        first_state_sleeping = first_transition.next_metadata.player.sleeping
+        last_state_sleeping = last_transition.next_metadata.player.sleeping
+
+        match first_state_sleeping, last_state_sleeping:
+            case True, False:
+                return GoalChecked(True, "Player woken up")
+            case False, True:
+                return GoalChecked(
+                    False, "Player was not sleeping at start, but was sleeping at end"
+                )
+            case False, False:
+                return GoalChecked(False, "Player was not sleeping at start or end")
+            case True, True:
+                return GoalChecked(
+                    False, "Player was sleeping at start but never awoke"
+                )
+            case _:
+                assert_never(_)
+
+
+implements(Scenario)(WakeUpScenario)
