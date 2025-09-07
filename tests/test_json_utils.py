@@ -1,4 +1,5 @@
 from distant_sunburn.json_utils import flatten_json_to_pathmap
+import jsonpatch
 
 
 def test_complex_manual_nested_structure():
@@ -180,3 +181,90 @@ def test_single_level_structures():
     result2 = flatten_json_to_pathmap(data2)
     expected2 = {"/0": "x", "/1": "y", "/2": "z"}
     assert result2 == expected2
+
+
+def test_edit_distance_normalization():
+    """Test that edit distance normalization works correctly with JsonPatch."""
+    # Create a complex JSON structure with known number of attributes
+    source_json = {
+        "user": {
+            "id": 123,
+            "name": "John Doe",
+            "email": "john@example.com",
+            "profile": {
+                "age": 30,
+                "city": "New York",
+                "country": "USA",
+                "preferences": {"theme": "dark", "language": "en"},
+            },
+        },
+        "settings": {"notifications": True, "privacy": "public"},
+    }
+
+    # Create a modified version with 3 specific changes
+    destination_json = {
+        "user": {
+            "id": 456,  # Changed: 123 -> 456
+            "name": "John Doe",
+            "email": "john.doe@example.com",  # Changed: john@example.com -> john.doe@example.com
+            "profile": {
+                "age": 30,
+                "city": "San Francisco",  # Changed: New York -> San Francisco
+                "country": "USA",
+                "preferences": {"theme": "dark", "language": "en"},
+            },
+        },
+        "settings": {"notifications": True, "privacy": "public"},
+    }
+
+    # Flatten both JSON structures to get all attributes
+    source_flat = flatten_json_to_pathmap(source_json)
+    destination_flat = flatten_json_to_pathmap(destination_json)
+
+    # Calculate total number of attributes (should be the same for both)
+    total_attributes = len(source_flat)
+    assert total_attributes == len(
+        destination_flat
+    ), "Both JSONs should have same number of attributes"
+
+    # Create JsonPatch to find the differences
+    patch = jsonpatch.make_patch(source_json, destination_json)
+    num_changes = len(patch.patch)
+
+    # Calculate normalized edit distance
+    normalized_distance = num_changes / total_attributes
+
+    # Verify our expectations
+    # We made 3 changes: id, email, and city
+    expected_changes = 3
+    expected_normalized_distance = expected_changes / total_attributes
+
+    assert (
+        num_changes == expected_changes
+    ), f"Expected {expected_changes} changes, got {num_changes}"
+    assert (
+        normalized_distance == expected_normalized_distance
+    ), f"Expected normalized distance {expected_normalized_distance}, got {normalized_distance}"
+
+    # Verify the total number of attributes is what we expect
+    # Manual count: /user/id, /user/name, /user/email, /user/profile/age, /user/profile/city,
+    # /user/profile/country, /user/profile/preferences/theme, /user/profile/preferences/language,
+    # /settings/notifications, /settings/privacy = 10 attributes
+    expected_total_attributes = 10
+    assert (
+        total_attributes == expected_total_attributes
+    ), f"Expected {expected_total_attributes} total attributes, got {total_attributes}"
+
+    # Verify the normalized distance is 30% (3 changes out of 10 attributes)
+    expected_percentage = 0.3
+    assert (
+        abs(normalized_distance - expected_percentage) < 0.001
+    ), f"Expected ~30% normalized distance, got {normalized_distance:.1%}"
+
+    # Print the patch for verification
+    print(f"Total attributes: {total_attributes}")
+    print(f"Number of changes: {num_changes}")
+    print(f"Normalized distance: {normalized_distance:.1%}")
+    print("JsonPatch operations:")
+    for op in patch.patch:
+        print(f"  {op['op']} {op['path']}: {op.get('value', 'N/A')}")
