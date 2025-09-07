@@ -47,7 +47,7 @@ def test_true_vs_null_world_model():
     true_results = evaluator.evaluate(true_model)
     null_results = evaluator.evaluate(null_model)
 
-    assert true_results.edit_distance < null_results.edit_distance
+    assert true_results.edit_distance.raw < null_results.edit_distance.raw
     assert true_results.discriminative_accuracy > null_results.discriminative_accuracy
     assert true_results.discriminative_accuracy > 0.9  # Near perfect
     assert (

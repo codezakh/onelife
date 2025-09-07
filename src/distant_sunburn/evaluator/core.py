@@ -13,6 +13,7 @@ from icecream import ic
 import random
 import copy
 from loguru import logger
+from typing_extensions import Self
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 SymbolicStateT_contra = TypeVar("SymbolicStateT_contra", contravariant=True)
@@ -62,9 +63,17 @@ class TrajectoryCollector(Protocol[SymbolicStateT, ActionT]):
 
 @dataclass(frozen=True)
 class EditDistance:
-    raw: int
+    raw: float
     normalized: float
-    total_elements: int
+    total_elements: float
+
+    @classmethod
+    def reduce(cls: type[Self], edit_distances: list[Self]) -> Self:
+        return cls(
+            raw=float(np.mean([ed.raw for ed in edit_distances])),
+            normalized=float(np.mean([ed.normalized for ed in edit_distances])),
+            total_elements=float(np.mean([ed.total_elements for ed in edit_distances])),
+        )
 
 
 class EditDistanceCalculator(Protocol[SymbolicStateT_contra]):
@@ -120,7 +129,7 @@ class EvaluationContext(Generic[SymbolicStateT, ActionT_contra]):
 class EvaluationResults:
     """Results from a evaluation run."""
 
-    edit_distance: float
+    edit_distance: EditDistance
     discriminative_accuracy: float
     discriminative_accuracy_by_distractor_type: dict[str, float]
     total_transitions_evaluated: int
@@ -139,7 +148,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         world_model: EvaluatableWorldModel[SymbolicStateT, ActionT],
     ) -> EvaluationResults:
 
-        generative_errors: list[int | float] = []
+        edit_distances: list[EditDistance] = []
         discriminative_successes: list[bool] = []
         distractor_type_results: dict[str, list[bool]] = defaultdict(list)
 
@@ -158,10 +167,10 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             )
 
             # 3. Measure generative error using injected calculator
-            gen_error = self.ctx.edit_distance_calculator(
+            edit_distance = self.ctx.edit_distance_calculator(
                 pred_state, transition.next_metadata
             )
-            generative_errors.append(gen_error.raw)
+            edit_distances.append(edit_distance)
 
             # 4. Generate distractors using injected generator
             distractors = self.ctx.distractor_generator(
@@ -232,7 +241,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         )
 
         return EvaluationResults(
-            edit_distance=float(np.mean(generative_errors)),
+            edit_distance=EditDistance.reduce(edit_distances),
             discriminative_accuracy=float(np.mean(discriminative_successes)),
             discriminative_accuracy_by_distractor_type=distractor_type_means,
             total_transitions_evaluated=len(self.ctx.test_transitions),

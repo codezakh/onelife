@@ -45,7 +45,7 @@ def test_evaluating_true_vs_null_world_model():
 
     #
     assert (
-        true_wm_perf.edit_distance == 0.0
+        true_wm_perf.edit_distance.raw == 0.0
     ), "True transition model should have low generative error"
 
     # Null model should perform worse than true model

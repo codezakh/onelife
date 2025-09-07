@@ -165,10 +165,10 @@ def test():
     rich.print(
         {
             "edit_distance": {
-                "true_wm": true_wm_perf.edit_distance,
-                "null_wm": null_wm_perf.edit_distance,
-                "learned_wm": learned_wm_perf.edit_distance,
-                "random_wm": random_wm_perf.edit_distance,
+                "true_wm": true_wm_perf.edit_distance.raw,
+                "null_wm": null_wm_perf.edit_distance.raw,
+                "learned_wm": learned_wm_perf.edit_distance.raw,
+                "random_wm": random_wm_perf.edit_distance.raw,
             },
             "discriminative_accuracy": {
                 "true_wm": true_wm_perf.discriminative_accuracy,
@@ -191,7 +191,7 @@ def test():
 
     # Assert that learned model underperforms true model
     assert (
-        learned_wm_perf.edit_distance > true_wm_perf.edit_distance
+        learned_wm_perf.edit_distance.raw > true_wm_perf.edit_distance.raw
     ), "Learned model should have higher generative error than true model"
 
     assert (
