@@ -165,10 +165,18 @@ def test():
     rich.print(
         {
             "edit_distance": {
-                "true_wm": true_wm_perf.edit_distance.raw,
-                "null_wm": null_wm_perf.edit_distance.raw,
-                "learned_wm": learned_wm_perf.edit_distance.raw,
-                "random_wm": random_wm_perf.edit_distance.raw,
+                "raw": {
+                    "true_wm": true_wm_perf.edit_distance.raw,
+                    "null_wm": null_wm_perf.edit_distance.raw,
+                    "learned_wm": learned_wm_perf.edit_distance.raw,
+                    "random_wm": random_wm_perf.edit_distance.raw,
+                },
+                "normalized": {
+                    "true_wm": true_wm_perf.edit_distance.normalized,
+                    "null_wm": null_wm_perf.edit_distance.normalized,
+                    "learned_wm": learned_wm_perf.edit_distance.normalized,
+                    "random_wm": random_wm_perf.edit_distance.normalized,
+                },
             },
             "discriminative_accuracy": {
                 "true_wm": true_wm_perf.discriminative_accuracy,
