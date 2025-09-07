@@ -17,12 +17,14 @@ from ..core import (
     SymbolicTransitionFunction,
     DistractorGenerator,
     EditDistanceCalculator,
+    EditDistance,
 )
 from ...simple_1d_env.environment import (
     GameState,
     Action,
     WorldConfig,
 )
+from ...json_utils import flatten_json_to_pathmap
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 
@@ -72,12 +74,21 @@ class JSONPatchEditDistance:
             # Exclude the RNG state, which is not easy to serialize.
         }
 
-    def __call__(self, state1: GameState, state2: GameState) -> int:
+    def __call__(self, state1: GameState, state2: GameState) -> EditDistance:
         """Compute the edit distance between two GameState objects using JSON patch."""
         json1 = self._gamestate_to_json(state1)
         json2 = self._gamestate_to_json(state2)
         patch = jsonpatch.make_patch(json1, json2)
-        return len(list(patch))
+        raw_edit_distance = len(list(patch))
+
+        flattened_json1 = flatten_json_to_pathmap(json1)
+        total_elements = len(flattened_json1)
+        normalized_edit_distance = raw_edit_distance / total_elements
+        return EditDistance(
+            raw=raw_edit_distance,
+            normalized=normalized_edit_distance,
+            total_elements=total_elements,
+        )
 
 
 implements(EditDistanceCalculator[GameState])(JSONPatchEditDistance)

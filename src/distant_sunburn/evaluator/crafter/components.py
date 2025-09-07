@@ -3,12 +3,18 @@ import jsonpatch
 import random
 from typing import Optional
 
-from ..core import DistractorGenerator, SymbolicTransition
+from ..core import (
+    DistractorGenerator,
+    SymbolicTransition,
+    EditDistanceCalculator,
+    EditDistance,
+)
 from .mutators import DEFAULT_MUTATORS, Mutator
 from crafter.constants import ActionT as CrafterAction
 from ...typing_utils import implements
 from loguru import logger
 from typing import Sequence
+from ...json_utils import flatten_json_to_pathmap
 
 
 # Note: This is almost a copy of the format_state function used to generate
@@ -46,15 +52,25 @@ def _gamestate_to_json(state: WorldState) -> dict:
 
 
 class JSONPatchEditDistance:
-    @staticmethod
-    def _make_patch(state1: WorldState, state2: WorldState) -> jsonpatch.JsonPatch:
+    def __call__(self, state1: WorldState, state2: WorldState) -> EditDistance:
+
         json1 = _gamestate_to_json(state1)
         json2 = _gamestate_to_json(state2)
-        return jsonpatch.make_patch(json1, json2)
+        patch = jsonpatch.make_patch(json1, json2)
+        raw_edit_distance = len(list(patch))
 
-    def __call__(self, state1: WorldState, state2: WorldState) -> int:
-        patch = self._make_patch(state1, state2)
-        return len(list(patch))
+        flattened_json1 = flatten_json_to_pathmap(json1)
+        total_elements = len(flattened_json1)
+        normalized_edit_distance = raw_edit_distance / total_elements
+
+        return EditDistance(
+            raw=raw_edit_distance,
+            normalized=normalized_edit_distance,
+            total_elements=total_elements,
+        )
+
+
+implements(EditDistanceCalculator[WorldState])(JSONPatchEditDistance)
 
 
 class CrafterDistractorGenerator:

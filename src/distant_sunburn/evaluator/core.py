@@ -60,12 +60,19 @@ class TrajectoryCollector(Protocol[SymbolicStateT, ActionT]):
         ...
 
 
+@dataclass(frozen=True)
+class EditDistance:
+    raw: int
+    normalized: float
+    total_elements: int
+
+
 class EditDistanceCalculator(Protocol[SymbolicStateT_contra]):
     """Protocol for computing edit distances between states."""
 
     def __call__(
         self, state1: SymbolicStateT_contra, state2: SymbolicStateT_contra
-    ) -> int:
+    ) -> EditDistance:
         """Compute structured edit distance between two states"""
         ...
 
@@ -154,7 +161,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             gen_error = self.ctx.edit_distance_calculator(
                 pred_state, transition.next_metadata
             )
-            generative_errors.append(gen_error)
+            generative_errors.append(gen_error.raw)
 
             # 4. Generate distractors using injected generator
             distractors = self.ctx.distractor_generator(
