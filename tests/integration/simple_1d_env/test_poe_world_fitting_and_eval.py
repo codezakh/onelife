@@ -128,17 +128,13 @@ def test():
         true_wm_perf = evaluator.evaluate(true_model)
         null_wm_perf = evaluator.evaluate(null_model)
 
-        assert (
-            learned_wm_perf.mean_generative_error < null_wm_perf.mean_generative_error
-        )
+        assert learned_wm_perf.edit_distance < null_wm_perf.edit_distance
         assert (
             learned_wm_perf.discriminative_accuracy
             > null_wm_perf.discriminative_accuracy
         )
 
-        assert (
-            learned_wm_perf.mean_generative_error > true_wm_perf.mean_generative_error
-        )
+        assert learned_wm_perf.edit_distance > true_wm_perf.edit_distance
         assert (
             learned_wm_perf.discriminative_accuracy
             < true_wm_perf.discriminative_accuracy

@@ -47,7 +47,7 @@ def test_true_vs_null_world_model():
     true_results = evaluator.evaluate(true_model)
     null_results = evaluator.evaluate(null_model)
 
-    assert true_results.mean_generative_error < null_results.mean_generative_error
+    assert true_results.edit_distance < null_results.edit_distance
     assert true_results.discriminative_accuracy > null_results.discriminative_accuracy
     assert true_results.discriminative_accuracy > 0.9  # Near perfect
     assert (
@@ -138,6 +138,6 @@ def test_deterministic_evaluation():
     results2 = evaluator.evaluate(true_model)
 
     # Results should be identical
-    assert results1.mean_generative_error == results2.mean_generative_error
+    assert results1.edit_distance == results2.edit_distance
     assert results1.discriminative_accuracy == results2.discriminative_accuracy
     assert results1.total_transitions_evaluated == results2.total_transitions_evaluated

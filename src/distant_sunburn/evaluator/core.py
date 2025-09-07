@@ -113,7 +113,7 @@ class EvaluationContext(Generic[SymbolicStateT, ActionT_contra]):
 class EvaluationResults:
     """Results from a evaluation run."""
 
-    mean_generative_error: float
+    edit_distance: float
     discriminative_accuracy: float
     discriminative_accuracy_by_distractor_type: dict[str, float]
     total_transitions_evaluated: int
@@ -225,7 +225,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         )
 
         return EvaluationResults(
-            mean_generative_error=float(np.mean(generative_errors)),
+            edit_distance=float(np.mean(generative_errors)),
             discriminative_accuracy=float(np.mean(discriminative_successes)),
             discriminative_accuracy_by_distractor_type=distractor_type_means,
             total_transitions_evaluated=len(self.ctx.test_transitions),
