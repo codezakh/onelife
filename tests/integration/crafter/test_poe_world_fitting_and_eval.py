@@ -11,6 +11,7 @@ import copy
 import random
 from typing import List
 
+from loguru import logger
 import numpy as np
 
 from crafter.functional_env import EnvConfig, initial_state, transition
@@ -114,7 +115,8 @@ def test():
     )
 
     evaluator = Evaluator(evaluation_context)
-    learned_wm_perf = evaluator.evaluate(learned_world_model)
+    with logger.contextualize(world_model="learned"):
+        learned_wm_perf = evaluator.evaluate(learned_world_model)
 
     # Create true and null models for comparison
     def equality_check(state1: WorldState, state2: WorldState) -> bool:
@@ -127,8 +129,10 @@ def test():
     true_model = TrueTransitionWorldModel(wrap_true_transition_fn, equality_check)
     null_model = NullWorldModel(equality_check)
 
-    true_wm_perf = evaluator.evaluate(true_model)
-    null_wm_perf = evaluator.evaluate(null_model)
+    with logger.contextualize(world_model="true"):
+        true_wm_perf = evaluator.evaluate(true_model)
+    with logger.contextualize(world_model="null"):
+        null_wm_perf = evaluator.evaluate(null_model)
 
     # Check that the bad entity lifecycle expert gets a low weight
     bad_expert_weight = None
@@ -159,7 +163,8 @@ def test():
 
     # Also check perf of random world model just for debugging purposes
     random_world_model = RandomWorldModel()
-    random_wm_perf = evaluator.evaluate(random_world_model)
+    with logger.contextualize(world_model="random"):
+        random_wm_perf = evaluator.evaluate(random_world_model)
 
     # Print all performance metrics for debugging as a dictionary
     rich.print(
@@ -176,6 +181,12 @@ def test():
                     "null_wm": null_wm_perf.edit_distance.normalized,
                     "learned_wm": learned_wm_perf.edit_distance.normalized,
                     "random_wm": random_wm_perf.edit_distance.normalized,
+                },
+                "intersection_over_union": {
+                    "true_wm": true_wm_perf.edit_distance.intersection_over_union,
+                    "null_wm": null_wm_perf.edit_distance.intersection_over_union,
+                    "learned_wm": learned_wm_perf.edit_distance.intersection_over_union,
+                    "random_wm": random_wm_perf.edit_distance.intersection_over_union,
                 },
             },
             "discriminative_accuracy": {

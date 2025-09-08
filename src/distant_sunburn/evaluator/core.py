@@ -249,6 +249,34 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             },
         )
 
+        logger.info(
+            "Edit Distance Stats/Raw",
+            edit_distance_stats={
+                "mean": float(np.mean([ed.raw for ed in edit_distances])),
+                "max": float(np.max([ed.raw for ed in edit_distances])),
+                "min": float(np.min([ed.raw for ed in edit_distances])),
+                "std": float(np.std([ed.raw for ed in edit_distances])),
+            },
+        )
+
+        logger.info(
+            "Edit Distance Stats/Intersection Over Union",
+            edit_distance_stats={
+                "mean": float(
+                    np.mean([ed.intersection_over_union for ed in edit_distances])
+                ),
+                "max": float(
+                    np.max([ed.intersection_over_union for ed in edit_distances])
+                ),
+                "min": float(
+                    np.min([ed.intersection_over_union for ed in edit_distances])
+                ),
+                "std": float(
+                    np.std([ed.intersection_over_union for ed in edit_distances])
+                ),
+            },
+        )
+
         return EvaluationResults(
             edit_distance=EditDistance.reduce(edit_distances),
             discriminative_accuracy=float(np.mean(discriminative_successes)),
