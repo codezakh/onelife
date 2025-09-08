@@ -37,7 +37,7 @@ def _generate_transitions(
     transitions: List[SymbolicTransition[GameState]] = []
 
     for _ in range(n):
-        action = rng.choice(list(Action))
+        action = rng.choice(list(Action))  # type: ignore
         next_state = transition_function(state, action, DEFAULT_LAWS)
         transitions.append(
             SymbolicTransition(
