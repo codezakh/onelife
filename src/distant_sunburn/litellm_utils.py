@@ -5,6 +5,7 @@ import litellm
 from ulid import ULID
 import os
 
+
 class LiteLlmMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
     content: str
@@ -17,7 +18,7 @@ class LiteLlmMessage(BaseModel):
 # type here and avoid tedious assertions or isinstance checks
 # elsewhere in the code.
 class NonStreamingModelResponse(ModelResponse):
-    choices: list[Choices]
+    choices: list[Choices]  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 class LiteLlmParamsBase(BaseModel):
