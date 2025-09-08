@@ -16,7 +16,7 @@ import pytest
 import numpy as np
 from pathlib import Path
 
-from distant_sunburn.poe_world.core import SymbolicTransition, WeightedExpert
+from distant_sunburn.poe_world.core import SymbolicTransition
 from distant_sunburn.poe_world.expert_manager import ExpertManager
 from distant_sunburn.poe_world.object_model_learner import (
     ObjectModelOrchestrator,
@@ -30,9 +30,7 @@ from crafter.functional_env import (
     initial_state,
     reconstruct_world_from_state,
     export_world_state,
-    transition,
 )
-from crafter.constants import ActionT
 
 
 def create_simple_movement_transitions() -> list[SymbolicTransition[WorldState]]:
@@ -183,7 +181,7 @@ def test_crafter_integration_with_real_synthesizer(tmp_path: Path):
     ), "At least some weights should have been learned"
 
     # Print out the synthesized experts for debugging
-    print(f"\n=== Synthesized Experts ===")
+    print("\n=== Synthesized Experts ===")
     print(f"Non-creation experts: {len(result.non_creation_experts)}")
     print(f"Creation experts: {len(result.creation_experts)}")
 
@@ -213,9 +211,9 @@ def test_crafter_integration_with_real_synthesizer(tmp_path: Path):
 
         # Call the expert function with a test action
         result = test_expert.expert_function(test_state, "move_right")
-        print(f"\n=== Expert Function Test ===")
+        print("\n=== Expert Function Test ===")
         print(f"Function call result: {result}")
-        print(f"Function executed successfully without errors")
+        print("Function executed successfully without errors")
 
 
 def test_fast_inference_with_crafter_expert_manager(tmp_path: Path):
@@ -293,7 +291,7 @@ def test_fast_inference_with_crafter_expert_manager(tmp_path: Path):
     )
     assert len(fast_result.creation_experts) >= len(full_result.creation_experts)
 
-    print(f"\n=== Fast Inference Test ===")
+    print("\n=== Fast Inference Test ===")
     print(
         f"Full inference experts: {len(full_result.non_creation_experts)} non-creation, {len(full_result.creation_experts)} creation"
     )
