@@ -45,8 +45,9 @@ Our current pieces:
 4) Downstream consumers (evaluation, prospective agent) use the composed model for sampling and scoring.
 
 ## Testing Plan (sketch)
-- Unit: Composition behavior
-  - Build a small set of 1D handwritten experts across two pseudo-types; compose and check:
+- Unit: Composition behavior (Simple 1D)
+  - We already have hand-written experts in `simple_1d_env/handwritten_experts.py`.
+  - Build a small set across two pseudo-types; compose and check:
     - `evaluate_log_probability(s,a,s')` is higher for true vs wrong next state.
     - Unpredicted attributes do not impact log-prob.
 - Integration: Orchestrator → Composed model (Crafter)
