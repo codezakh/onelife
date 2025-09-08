@@ -156,9 +156,10 @@ Your task is to generate a Python function that modifies a GameState object to e
 The function should be named `alter_{object_type}_objects` where {object_type} is the type of object being modified.
 
 IMPORTANT: Only modify observable attributes that are tracked by the system:
-- player_position: Player's position in the 1D world (0-11)
-- light_0_is_on: Whether the first light is on (0 or 1)
-- light_1_is_on: Whether the second light is on (0 or 1)
+- player.position: Player's position in the 1D world (0-11)
+- lights: List of Light objects, where each Light has:
+  * position: The light's position in the world
+  * is_on: Whether the light is on (boolean)
 
 Do NOT modify other attributes like config, rng, or non-observable properties.
 
@@ -168,6 +169,11 @@ def alter_player_objects(current_state: GameState, action: Action) -> None:
     if action == Action.MOVE_RIGHT:
         new_position = min(current_state.config.width - 1, current_state.player.position + 1)
         current_state.player.position = DiscreteDistribution(support=[new_position])
+
+def alter_light_objects(current_state: GameState, action: Action) -> None:
+    # Example: toggle the first light
+    if len(current_state.lights) > 0:
+        current_state.lights[0].is_on = DiscreteDistribution(support=[1])
 ```
 
 Generate only the function code, no explanations or markdown formatting."""
@@ -196,9 +202,8 @@ Please generate a Python function named `alter_{object_type}_objects` that expla
 - Modify the current_state in-place by assigning DiscreteDistribution objects to relevant attributes
 - Return None
 - Only modify observable attributes that are relevant to the observed changes:
-  * player_position (0-11)
-  * light_0_is_on (0 or 1)
-  * light_1_is_on (0 or 1)
+  * player.position (0-11)
+  * lights[i].is_on (boolean for each light in the lights list)
 
 Generate only the function code:"""
 
