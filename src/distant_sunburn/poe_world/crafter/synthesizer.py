@@ -164,7 +164,7 @@ IMPORTANT: Use the correct attribute paths that match the actual WorldState stru
 
 **Entity attributes (for objects in current_state.objects):**
 - Find entities by iterating through current_state.objects
-- Access: obj.position.x, obj.position.y, obj.health
+- Access: obj.position.x, obj.position.y, obj.health, obj.entity_id
 - Example: for obj in current_state.objects: if obj.name == "cow": obj.health = new_value
 
 **World attributes:**
@@ -211,7 +211,7 @@ Please generate a Python function named `alter_{object_type}_objects` that expla
 - Return None
 - Use the correct attribute paths:
   * Player: current_state.player.position.x, current_state.player.position.y, current_state.player.health
-  * Entities: Iterate through current_state.objects and access obj.position.x, obj.position.y, obj.health
+  * Entities: Iterate through current_state.objects and access obj.position.x, obj.position.y, obj.health, obj.entity_id
   * Example: for obj in current_state.objects: if obj.name == "cow": obj.health = new_value
 
 Generate only the function code:"""
