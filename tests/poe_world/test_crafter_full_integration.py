@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 from typing import List
 
-import numpy as np
 import pytest
 
 from distant_sunburn.litellm_utils import GeminiLiteLlmParams
@@ -27,50 +26,33 @@ from distant_sunburn.poe_world.object_model_learner import (
 )
 from distant_sunburn.poe_world.poe_world_learner import PoEWorldLearner
 from distant_sunburn.poe_world.weight_fitter import MaxLikelihoodWeightFitter
-from external.crafter_refactored.crafter.constants import actions as CRAFTER_ACTIONS
 from external.crafter_refactored.crafter.functional_env import (
     initial_state,
     transition,
 )
 from external.crafter_refactored.crafter.state_export import WorldState
 from distant_sunburn.evaluator.crafter.utils import MAP_ACTION_TO_INDEX
+from external.crafter_refactored.crafter.constants import ActionT
 
 
 def _generate_cow_movement_transitions(
-    n: int = 4, seed: int = 1
+    seed: int = 1,
 ) -> List[SymbolicTransition[WorldState]]:
     """Generate a small set of transitions in a world with player and cow.
 
     We keep the number of transitions small for test speed. We use four distinct
     actions if available.
     """
-    rng = np.random.default_rng(seed)
-
     # Create initial small world
     state = initial_state(area=(9, 9), view=(9, 9), seed=seed)
 
-    # Choose up to 4 distinct actions for variety
-    candidate_actions = [
-        a
-        for a in CRAFTER_ACTIONS
-        if a in {"move_left", "move_right", "move_up", "move_down"}
-    ]
-    if len(candidate_actions) < 4:
-        # Fallback to any actions list
-        candidate_actions = list(CRAFTER_ACTIONS)
-
-    chosen_actions = candidate_actions[: min(4, len(candidate_actions))]
-    if n > len(chosen_actions):
-        chosen_actions = chosen_actions + list(
-            rng.choice(candidate_actions, n - len(chosen_actions))
-        )
-    else:
-        chosen_actions = chosen_actions[:n]
+    # Take a couple of hardcoded actions to generate transitions
+    actions: list[ActionT] = ["move_left", "move_right", "move_up", "move_down"]
 
     transitions: List[SymbolicTransition[WorldState]] = []
 
-    for a in chosen_actions:
-        idx = MAP_ACTION_TO_INDEX[a]  # type: ignore[index]
+    for a in actions:
+        idx = MAP_ACTION_TO_INDEX[a]
         next_state, _ = transition(state, idx)
         transitions.append(
             SymbolicTransition(prev_metadata=state, action=a, next_metadata=next_state)
@@ -125,7 +107,7 @@ def test_crafter_full_integration_two_obj_types(tmp_path):
     )
 
     # Generate small set of transitions
-    transitions = _generate_cow_movement_transitions(n=4, seed=11)
+    transitions = _generate_cow_movement_transitions(seed=11)
 
     # Baseline likelihood: before synthesis, composed model is empty; we treat baseline as very low
     baseline_lp = -1000.0
@@ -171,10 +153,10 @@ def test_crafter_full_integration_two_obj_types(tmp_path):
         low_weight = WeightedExpert(
             expert_function=_no_op_expert, weight=0.0, is_fitted=True
         )
-        orchestrator.non_creation_expert_manager.add_experts([low_weight])  # type: ignore[attr-defined]
-        before = len(orchestrator.non_creation_expert_manager.get_experts())  # type: ignore[attr-defined]
-        orchestrator.non_creation_expert_manager.prune_experts()  # type: ignore[attr-defined]
-        after = len(orchestrator.non_creation_expert_manager.get_experts())  # type: ignore[attr-defined]
+        orchestrator.non_creation_expert_manager.add_experts([low_weight])
+        before = len(orchestrator.non_creation_expert_manager.get_experts())
+        orchestrator.non_creation_expert_manager.prune_experts()
+        after = len(orchestrator.non_creation_expert_manager.get_experts())
         assert (
             after == before - 1
         ), f"Pruning did not remove low-weight expert for {obj_type}"

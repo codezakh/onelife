@@ -101,7 +101,7 @@ def test():
             l1_weight=0.001,
         )
 
-        weighted_experts = fitter.fit(ALL_EXPERTS, transitions)
+        weighted_experts = fitter.fit(ALL_EXPERTS, transitions)  # type: ignore
         learned_world_model = PoEWorldModel(
             observable_extractor=ObservableExtractor(),
             weighted_experts=weighted_experts,

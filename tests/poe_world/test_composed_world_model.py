@@ -27,17 +27,18 @@ from distant_sunburn.simple_1d_env.environment import (
     GameState,
     WorldConfig,
 )
+import random
 
 
 def _generate_transitions(
     n: int = 20, seed: int = 0
 ) -> List[SymbolicTransition[GameState]]:
-    rng = np.random.default_rng(seed)
+    rng = random.Random(seed)
     state = initial_state(WorldConfig(seed=seed))
     transitions: List[SymbolicTransition[GameState]] = []
 
     for _ in range(n):
-        action = rng.choice(list(Action))  # type: ignore
+        action = rng.choice(list(Action))
         next_state = transition_function(state, action, DEFAULT_LAWS)
         transitions.append(
             SymbolicTransition(
