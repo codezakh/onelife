@@ -5,21 +5,6 @@ This module implements the expert synthesis algorithm that generates Python code
 to explain observed state transitions in the Crafter environment.
 """
 
-from typing import List, Optional
-import ast
-from loguru import logger
-
-from crafter.state_export import WorldState
-from ..core import (
-    SymbolicTransition,
-    ExpertSynthesizerProtocol,
-    WeightedExpert,
-    ExpertFunction,
-)
-from ...litellm_utils import LiteLlmRequest, LiteLlmMessage, GeminiLiteLlmParams
-from ...typing_utils import implements
-from ...local_code_execution import ExecWithLimitedNamespace
-from ..synthesizer import GenericSynthesizer, SynthesisDependenciesProvider
 from crafter.state_export import (
     ArrowState,
     CowState,
@@ -30,8 +15,15 @@ from crafter.state_export import (
     WorldState,
     ZombieState,
 )
-from ..core import DiscreteDistribution
-from functools import partial
+
+from ...local_code_execution import ExecWithLimitedNamespace
+from ...typing_utils import implements
+from ..core import (
+    DiscreteDistribution,
+    ExpertSynthesizerProtocol,
+    SymbolicTransition,
+)
+from ..synthesizer import GenericSynthesizer, SynthesisDependenciesProvider
 
 
 class CrafterSynthesisDependenciesProvider:
@@ -200,6 +192,10 @@ Generate only the function code:"""
         )
 
 
-CrafterExpertSynthesizer = GenericSynthesizer[WorldState]
+implements(SynthesisDependenciesProvider[WorldState])(
+    CrafterSynthesisDependenciesProvider
+)
 
+
+CrafterExpertSynthesizer = GenericSynthesizer[WorldState]
 implements(ExpertSynthesizerProtocol[WorldState])(CrafterExpertSynthesizer)
