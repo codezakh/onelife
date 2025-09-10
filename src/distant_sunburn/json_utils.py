@@ -1,6 +1,9 @@
 import json
 from typing import Any, NamedTuple
 import jsonpatch
+import numpy as np
+from pydantic import BaseModel
+from typing import TypeVar, cast
 
 
 def flatten_json_to_pathmap(data: dict | list) -> dict[str, Any]:
@@ -129,3 +132,42 @@ def compute_patch_intersection_over_union(
 
     iou = len(intersection) / len(union)
     return iou
+
+
+def _coerce_numpy_to_builtins(obj: Any) -> Any:
+    """
+    Recursively convert numpy scalar/array types into Python builtins.
+
+    - np.generic (np.int64, np.float64, np.bool_) -> .item()
+    - np.ndarray -> .tolist()
+    - Containers (dict, list, tuple, set) -> coerced recursively, preserving type
+    """
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: _coerce_numpy_to_builtins(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_coerce_numpy_to_builtins(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_coerce_numpy_to_builtins(v) for v in obj)
+    if isinstance(obj, set):
+        return {_coerce_numpy_to_builtins(v) for v in obj}
+    return obj
+
+
+TModel = TypeVar("TModel", bound=BaseModel)
+
+
+def sanitize_model_numpy_types(model: TModel) -> TModel:
+    """
+    Return a new instance of the same Pydantic model with numpy types coerced
+    to Python builtins by dumping in Python mode, coercing, then re-validating.
+
+    This is non-invasive (doesn't mutate the original model in place) and
+    ensures the resulting model is fully JSON-serializable under Pydantic v2.
+    """
+    data = model.model_dump(mode="python")
+    data = _coerce_numpy_to_builtins(data)
+    return cast(TModel, model.__class__.model_validate(data))
