@@ -12,6 +12,7 @@ from crafter.state_export import WorldState
 
 from distant_sunburn.poe_world.crafter.synthesizer import (
     CrafterExpertSynthesizer,
+    CrafterSynthesisDependenciesProvider,
 )
 from distant_sunburn.poe_world.core import (
     SymbolicTransition,
@@ -24,17 +25,11 @@ from distant_sunburn.litellm_utils import GeminiLiteLlmParams
 class TestCrafterExpertSynthesizer:
     """Test the Crafter expert synthesizer."""
 
-    def test_synthesizer_initialization(self):
-        """Test that the synthesizer can be initialized."""
-        synthesizer = CrafterExpertSynthesizer()
-        assert synthesizer is not None
-        assert synthesizer.llm_params is not None
-
     def test_extract_state_changes(self, cow_attack_scenario):
         """Test that state changes are correctly extracted for observable attributes only."""
-        synthesizer = CrafterExpertSynthesizer()
+        dependencies_provider = CrafterSynthesisDependenciesProvider()
 
-        changes = synthesizer._extract_state_changes(cow_attack_scenario)
+        changes = dependencies_provider._extract_state_changes(cow_attack_scenario)
 
         # Should detect the cow health change (observable attribute)
         assert "cow" in changes.lower()
@@ -47,7 +42,9 @@ class TestCrafterExpertSynthesizer:
 
     def test_extract_expert_function(self):
         """Test that expert functions can be extracted from LLM responses."""
-        synthesizer = CrafterExpertSynthesizer()
+        synthesizer = CrafterExpertSynthesizer(
+            dependencies_provider=CrafterSynthesisDependenciesProvider(),
+        )
 
         # Test with valid function
         valid_response = """
@@ -66,7 +63,9 @@ def alter_cow_objects(current_state: WorldState, action: str) -> None:
 
     def test_validate_expert_code(self):
         """Test that expert code validation works."""
-        synthesizer = CrafterExpertSynthesizer()
+        synthesizer = CrafterExpertSynthesizer(
+            dependencies_provider=CrafterSynthesisDependenciesProvider(),
+        )
 
         # Valid code
         valid_code = """
@@ -90,7 +89,9 @@ def alter_cow_objects(current_state: WorldState, action: str) -> None:
 
     def test_compile_expert_function(self):
         """Test that expert functions can be compiled into callable objects."""
-        synthesizer = CrafterExpertSynthesizer()
+        synthesizer = CrafterExpertSynthesizer(
+            dependencies_provider=CrafterSynthesisDependenciesProvider(),
+        )
 
         # Test code that should compile successfully
         test_code = """
@@ -110,7 +111,9 @@ def alter_cow_objects(current_state: WorldState, action: str) -> None:
 
     def test_compile_expert_function_failure(self):
         """Test that compilation failures are handled gracefully."""
-        synthesizer = CrafterExpertSynthesizer()
+        synthesizer = CrafterExpertSynthesizer(
+            dependencies_provider=CrafterSynthesisDependenciesProvider(),
+        )
 
         # Test code with syntax error
         invalid_code = """
@@ -123,6 +126,7 @@ def alter_cow_objects(current_state: WorldState, action: str) -> None:
         assert expert_function is None
 
 
+@pytest.mark.flaky(retries=3, delay=0.25)
 @pytest.mark.asyncio
 async def test_synthesize_experts_integration(cow_attack_scenario):
     """
@@ -138,7 +142,9 @@ async def test_synthesize_experts_integration(cow_attack_scenario):
     if not os.environ.get("GEMINI_API_KEY"):
         pytest.skip("GEMINI_API_KEY not available")
 
-    synthesizer = CrafterExpertSynthesizer()
+    synthesizer = CrafterExpertSynthesizer(
+        dependencies_provider=CrafterSynthesisDependenciesProvider(),
+    )
 
     # Try to synthesize experts for cow object type
     # Note: The synthesizer assumes these transitions are already filtered for surprising ones
