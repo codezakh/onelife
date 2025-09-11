@@ -15,6 +15,9 @@ from typing import Any
 
 from ..core import DiscreteDistribution
 from ...simple_1d_env.environment import GameState, Action
+from typing import Callable, TypeVar
+import inspect
+from ..core import ExpertFunctionWrapper
 
 
 def correct_movement_expert(
@@ -199,16 +202,34 @@ def incorrect_light_expert_is_deterministic(
         light.is_on = DiscreteDistribution(support=[new_state])  # type: ignore
 
 
+# Add __source_code__ property to all expert functions
+CallableT = TypeVar("CallableT", bound=Callable)
+
+
+def _add_source_code_to_expert(
+    expert_func: CallableT,
+) -> CallableT:
+    """Helper function to add __source_code__ property to expert functions."""
+    setattr(expert_func, "__source_code__", inspect.getsource(expert_func))
+    return expert_func
+
+
 # Collection of all experts for easy access
 CORRECT_EXPERTS = [
-    correct_movement_expert,
-    correct_light_expert,
+    ExpertFunctionWrapper.from_non_runtime_created(correct_movement_expert),
+    ExpertFunctionWrapper.from_non_runtime_created(correct_light_expert),
 ]
 
 INCORRECT_EXPERTS = [
-    incorrect_movement_expert_ignores_switch,
-    incorrect_movement_expert_ignores_slip,
-    incorrect_light_expert_is_deterministic,
+    ExpertFunctionWrapper.from_non_runtime_created(
+        incorrect_movement_expert_ignores_switch
+    ),
+    ExpertFunctionWrapper.from_non_runtime_created(
+        incorrect_movement_expert_ignores_slip
+    ),
+    ExpertFunctionWrapper.from_non_runtime_created(
+        incorrect_light_expert_is_deterministic
+    ),
 ]
 
 ALL_EXPERTS = CORRECT_EXPERTS + INCORRECT_EXPERTS

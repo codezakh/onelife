@@ -37,6 +37,7 @@ from external.crafter_refactored.crafter.functional_env import (
 from external.crafter_refactored.crafter.state_export import WorldState
 from distant_sunburn.evaluator.crafter.utils import MAP_ACTION_TO_INDEX
 from external.crafter_refactored.crafter.constants import ActionT
+from distant_sunburn.poe_world.core import ExpertFunctionWrapper
 
 
 def _generate_cow_movement_transitions(
@@ -157,11 +158,14 @@ def test_crafter_full_integration_two_obj_types(tmp_path):
     def _no_op_expert(current_state: WorldState, action: str) -> None:
         return None
 
+    # Some stuffs to make the type checker happy
+    no_op_expert = ExpertFunctionWrapper.from_non_runtime_created(_no_op_expert)
+
     for obj_type, orchestrator in orchestrators.items():
         obj_model = orchestrator.get_model()
         # Add one low-weight expert to non-creation manager
         low_weight = WeightedExpert(
-            expert_function=_no_op_expert, weight=0.0, is_fitted=True
+            expert_function=no_op_expert, weight=0.0, is_fitted=True
         )
         orchestrator.non_creation_expert_manager.add_experts([low_weight])
         before = len(orchestrator.non_creation_expert_manager.get_experts())

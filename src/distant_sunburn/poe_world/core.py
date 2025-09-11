@@ -23,7 +23,8 @@ import numpy.typing as npt
 import torch
 from scipy.special import logsumexp
 
-from typing import Sequence
+from typing import Sequence, Callable
+import inspect
 
 # Type variable for the metadata type used by different environments
 MetadataT = TypeVar("MetadataT")
@@ -113,7 +114,10 @@ class DiscreteDistribution:
         return f"{self.__class__.__name__}(support={self.support}, logscores={self.logscores})"
 
 
-class ExpertFunction(Protocol[MetadataT]):
+MetadataT_contra = TypeVar("MetadataT_contra", contravariant=True)
+
+
+class ExpertFunction(Protocol[MetadataT_contra]):
     """
     Protocol defining the interface that all expert functions must implement.
 
@@ -122,7 +126,7 @@ class ExpertFunction(Protocol[MetadataT]):
     they have opinions about.
     """
 
-    def __call__(self, current_state: MetadataT, action: Any, **context: Any) -> None:
+    def __call__(self, current_state: MetadataT_contra, action: Any) -> None:
         """
         Execute this expert's logic on the current state.
 
@@ -144,6 +148,33 @@ class ExpertFunction(Protocol[MetadataT]):
         ...
 
 
+class ExpertFunctionWrapper(Generic[MetadataT_contra]):
+    def __init__(
+        self,
+        expert_func: Callable[[MetadataT_contra, Any], None],
+        source_code: str,
+    ):
+        self.expert_func = expert_func
+        self.source_code = source_code
+
+    def __call__(self, current_state: MetadataT_contra, action: Any) -> None:
+        self.expert_func(current_state, action)
+
+    @classmethod
+    def from_non_runtime_created(
+        cls, expert_func: Callable[[MetadataT_contra, Any], None]
+    ) -> "ExpertFunctionWrapper[MetadataT_contra]":
+        return cls(expert_func, inspect.getsource(expert_func))
+
+    @property
+    def __source_code__(self) -> str:
+        return self.source_code
+
+    @property
+    def __name__(self) -> str:
+        return self.expert_func.__name__
+
+
 @attrs.define(frozen=True)
 class SymbolicTransition(Generic[MetadataT]):
     """
@@ -157,10 +188,10 @@ class SymbolicTransition(Generic[MetadataT]):
 
 
 @attrs.define(frozen=True)
-class WeightedExpert:
+class WeightedExpert(Generic[MetadataT]):
     """An expert function associated with its learned weight."""
 
-    expert_function: Any  # ExpertFunction - avoiding generic issue
+    expert_function: ExpertFunction[MetadataT]
     weight: float
     is_fitted: bool = False
 

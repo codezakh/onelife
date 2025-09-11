@@ -22,6 +22,7 @@ import inspect
 from ..core import DiscreteDistribution
 from crafter.state_export import WorldState
 from crafter.constants import ActionT
+from ..core import ExpertFunctionWrapper
 
 # Action types for Crafter
 # Action = Literal[
@@ -362,16 +363,24 @@ def _add_source_code_to_expert(
 
 # Collection of all experts for easy access
 CORRECT_EXPERTS = [
-    _add_source_code_to_expert(correct_player_movement_expert),
-    _add_source_code_to_expert(correct_combat_damage_expert),
-    _add_source_code_to_expert(correct_entity_ai_expert),
+    ExpertFunctionWrapper.from_non_runtime_created(correct_player_movement_expert),
+    ExpertFunctionWrapper.from_non_runtime_created(correct_combat_damage_expert),
+    ExpertFunctionWrapper.from_non_runtime_created(correct_entity_ai_expert),
 ]
 
 INCORRECT_EXPERTS = [
-    _add_source_code_to_expert(incorrect_player_movement_expert_teleports),
-    _add_source_code_to_expert(incorrect_combat_damage_expert_instakills),
-    _add_source_code_to_expert(incorrect_entity_ai_expert_self_destructs),
-    _add_source_code_to_expert(incorrect_entity_lifecycle_expert_spurious_spawning),
+    ExpertFunctionWrapper.from_non_runtime_created(
+        incorrect_player_movement_expert_teleports
+    ),
+    ExpertFunctionWrapper.from_non_runtime_created(
+        incorrect_combat_damage_expert_instakills
+    ),
+    ExpertFunctionWrapper.from_non_runtime_created(
+        incorrect_entity_ai_expert_self_destructs
+    ),
+    ExpertFunctionWrapper.from_non_runtime_created(
+        incorrect_entity_lifecycle_expert_spurious_spawning
+    ),
 ]
 
 ALL_EXPERTS = CORRECT_EXPERTS + INCORRECT_EXPERTS
