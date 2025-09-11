@@ -440,16 +440,10 @@ class ObjectModelOrchestrator(Generic[SymbolicStateT, ActionT]):
         checkpoint_path = self._get_checkpoint_path(checkpoint)
 
         try:
-            non_creation_success = self.non_creation_expert_manager.load(
-                checkpoint_path + "_non_creation"
-            )
-            creation_success = self.creation_expert_manager.load(
-                checkpoint_path + "_creation"
-            )
-            success = non_creation_success and creation_success
-            if success:
-                logger.info(f"Loaded checkpoint {checkpoint} from {checkpoint_path}")
-            return success
+            self.non_creation_expert_manager.load(checkpoint_path + "_non_creation")
+            self.creation_expert_manager.load(checkpoint_path + "_creation")
+            logger.info(f"Loaded checkpoint {checkpoint} from {checkpoint_path}")
+            return True
         except Exception as e:
             logger.warning(f"Failed to load checkpoint {checkpoint}: {e}")
             return False
