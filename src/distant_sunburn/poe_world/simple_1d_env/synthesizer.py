@@ -19,129 +19,14 @@ from ..core import (
 from ...litellm_utils import LiteLlmRequest, LiteLlmMessage, GeminiLiteLlmParams
 from ...typing_utils import implements
 from ...local_code_execution import ExecWithLimitedNamespace
+from ..synthesizer import GenericSynthesizer, SynthesisDependenciesProvider
+from ...typing_utils import implements
+from ...simple_1d_env.environment import GameState, Action
+from ..core import DiscreteDistribution
 
 
-class Simple1DExpertSynthesizer:
-    """
-    Expert synthesizer for the simple 1D environment.
-
-    This synthesizer uses LLM calls to generate Python expert functions that
-    explain observed state transitions in the 1D environment. It follows the
-    PoE-World approach of surprise-driven synthesis, only generating experts
-    for transitions that the current model cannot explain well.
-    """
-
-    def __init__(self, llm_params: Optional[GeminiLiteLlmParams] = None):
-        """
-        Initialize the synthesizer.
-
-        Args:
-            llm_params: LLM parameters for synthesis. If None, uses default Gemini params.
-        """
-        self.llm_params = llm_params or GeminiLiteLlmParams()
-
-    async def synthesize_experts(
-        self,
-        transitions: List[SymbolicTransition[GameState]],
-        object_type: str,
-    ) -> List[WeightedExpert]:
-        """
-        Synthesize expert programs from state transitions.
-
-        This method expects transitions that have already been filtered for "surprising"
-        ones by the calling ObjModelLearner. The synthesizer focuses purely on
-        generating experts from the provided transitions.
-
-        Args:
-            transitions: Sequence of state transitions to analyze (already filtered for surprising ones)
-            object_type: Type of object to synthesize experts for
-
-        Returns:
-            List of WeightedExpert objects containing compiled expert functions
-        """
-        if not transitions:
-            return []
-
-        # Generate experts for all provided transitions (assumed to be surprising)
-        experts = []
-        for transition in transitions:
-            try:
-                expert = await self._synthesize_expert_for_transition(
-                    transition, object_type
-                )
-                if expert:
-                    experts.append(expert)
-            except Exception as e:
-                logger.error(f"Failed to synthesize expert for transition: {e}")
-                continue
-
-        return experts
-
-    async def _synthesize_expert_for_transition(
-        self,
-        transition: SymbolicTransition[GameState],
-        object_type: str,
-    ) -> Optional[WeightedExpert]:
-        """
-        Synthesize a single expert for a specific transition.
-
-        Args:
-            transition: The state transition to explain
-            object_type: Type of object to focus on
-
-        Returns:
-            WeightedExpert or None if synthesis failed
-        """
-        # Create prompt for the LLM
-        prompt = self._create_synthesis_prompt(transition, object_type)
-
-        # Call LLM
-        request = LiteLlmRequest(
-            messages=[
-                LiteLlmMessage(role="system", content=self._get_system_prompt()),
-                LiteLlmMessage(role="user", content=prompt),
-            ],
-            params=self.llm_params,
-        )
-
-        try:
-            response = request()
-            code = response.choices[0].message.content
-
-            if not code:
-                logger.warning("Empty response from LLM")
-                return None
-
-            # Extract and validate the generated code
-            expert_code = self._extract_expert_function(code)
-            if not expert_code:
-                logger.warning(
-                    "Failed to extract valid expert function from LLM response"
-                )
-                return None
-
-            # Validate the code
-            if not self._validate_expert_code(expert_code):
-                logger.warning("Generated expert code failed validation")
-                return None
-
-            # Compile the expert function
-            expert_function = self._compile_expert_function(expert_code, object_type)
-            if not expert_function:
-                logger.warning("Failed to compile expert function")
-                return None
-
-            return WeightedExpert(
-                expert_function=expert_function,
-                weight=1.0,
-                is_fitted=False,
-            )
-
-        except Exception as e:
-            logger.error(f"LLM call failed: {e}")
-            return None
-
-    def _get_system_prompt(self) -> str:
+class Simple1DSynthesisDependenciesProvider:
+    def get_system_prompt(self) -> str:
         """Get the system prompt for expert synthesis."""
         return """You are an expert at analyzing 1D game state transitions and generating Python functions that explain the observed changes.
 
@@ -178,7 +63,7 @@ def alter_light_objects(current_state: GameState, action: Action) -> None:
 
 Generate only the function code, no explanations or markdown formatting."""
 
-    def _create_synthesis_prompt(
+    def get_synthesis_prompt(
         self,
         transition: SymbolicTransition[GameState],
         object_type: str,
@@ -232,66 +117,22 @@ Generate only the function code:"""
 
         return "\n".join(changes) if changes else "- No significant changes detected"
 
-    def _extract_expert_function(self, llm_response: str) -> Optional[str]:
-        """Extract the expert function code from the LLM response."""
-        # Look for function definition
-        lines = llm_response.strip().split("\n")
-        function_lines = []
-        in_function = False
+    def get_executor(self) -> ExecWithLimitedNamespace:
 
-        for line in lines:
-            if line.strip().startswith("def "):
-                in_function = True
-                function_lines.append(line)
-            elif in_function:
-                if line.strip() == "" or line.strip().startswith("```"):
-                    break
-                function_lines.append(line)
-
-        if function_lines:
-            return "\n".join(function_lines)
-
-        return None
-
-    def _validate_expert_code(self, code: str) -> bool:
-        """Validate that the generated expert code is syntactically correct."""
-        try:
-            ast.parse(code)
-            return True
-        except SyntaxError:
-            return False
-
-    def _compile_expert_function(
-        self, code: str, object_type: str
-    ) -> Optional[ExpertFunction[GameState]]:
-        """Compile the generated code into a callable expert function."""
-        try:
-            function_name = f"alter_{object_type}_objects"
-
-            # Create executor with access to required classes
-            from ...simple_1d_env.environment import GameState, Action
-            from ..core import DiscreteDistribution
-
-            executor = ExecWithLimitedNamespace(
-                inherited_scope={
-                    "GameState": GameState,
-                    "Action": Action,
-                    "DiscreteDistribution": DiscreteDistribution,
-                },
-                allowed_names={"GameState", "Action", "DiscreteDistribution"},
-            )
-
-            # Compile the code
-            executor(code)
-
-            # Extract the compiled function from the namespace
-            expert_function = executor.namespace[function_name]
-
-            return expert_function
-
-        except Exception as e:
-            logger.error(f"Failed to compile expert function: {e}")
-            return None
+        return ExecWithLimitedNamespace(
+            inherited_scope={
+                "GameState": GameState,
+                "Action": Action,
+                "DiscreteDistribution": DiscreteDistribution,
+            },
+            allowed_names={"GameState", "Action", "DiscreteDistribution"},
+        )
 
 
+implements(SynthesisDependenciesProvider[GameState])(
+    Simple1DSynthesisDependenciesProvider
+)
+
+
+Simple1DExpertSynthesizer = GenericSynthesizer[GameState]
 implements(ExpertSynthesizerProtocol[GameState])(Simple1DExpertSynthesizer)

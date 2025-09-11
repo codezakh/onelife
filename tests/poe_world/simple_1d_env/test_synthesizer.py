@@ -18,11 +18,13 @@ from distant_sunburn.simple_1d_env.environment import (
 
 from distant_sunburn.poe_world.simple_1d_env.synthesizer import (
     Simple1DExpertSynthesizer,
+    Simple1DSynthesisDependenciesProvider,
 )
 from distant_sunburn.poe_world.core import (
     SymbolicTransition,
     WeightedExpert,
 )
+import os
 
 
 @pytest.fixture
@@ -44,40 +46,32 @@ def player_movement_scenario():
 class TestSimple1DExpertSynthesizer:
     """Test the simple 1D environment expert synthesizer."""
 
-    def test_synthesizer_initialization_creates_valid_instance(self):
-        """Test that the synthesizer can be initialized with default parameters."""
-        synthesizer = Simple1DExpertSynthesizer()
-        assert isinstance(synthesizer, Simple1DExpertSynthesizer)
-
-    def test_synthesizer_initialization_with_custom_params(self):
-        """Test that the synthesizer can be initialized with custom LLM parameters."""
-        from distant_sunburn.litellm_utils import GeminiLiteLlmParams
-
-        custom_params = GeminiLiteLlmParams()
-        synthesizer = Simple1DExpertSynthesizer(custom_params)
-        assert synthesizer.llm_params is custom_params
-
     @pytest.mark.asyncio
     async def test_synthesize_experts_returns_empty_list_for_no_transitions(self):
         """Test that synthesizing with no transitions returns empty list."""
-        synthesizer = Simple1DExpertSynthesizer()
+        synthesizer = Simple1DExpertSynthesizer(
+            dependencies_provider=Simple1DSynthesisDependenciesProvider()
+        )
         experts = await synthesizer.synthesize_experts(
             transitions=[], object_type="player"
         )
         assert experts == []
 
+    @pytest.mark.flaky(retries=3, delay=0.25)
     @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        not os.environ.get("GEMINI_API_KEY"),
+        reason="GEMINI_API_KEY not available",
+    )
     async def test_synthesize_experts_creates_valid_experts_for_player_movement(
         self, player_movement_scenario
     ):
         """Test that synthesized experts for player movement have correct structure and behavior."""
         # Skip if no API key is available
-        import os
 
-        if not os.environ.get("GEMINI_API_KEY"):
-            pytest.skip("GEMINI_API_KEY not available")
-
-        synthesizer = Simple1DExpertSynthesizer()
+        synthesizer = Simple1DExpertSynthesizer(
+            dependencies_provider=Simple1DSynthesisDependenciesProvider()
+        )
         experts = await synthesizer.synthesize_experts(
             transitions=[player_movement_scenario],
             object_type="player",
@@ -91,10 +85,7 @@ class TestSimple1DExpertSynthesizer:
             assert isinstance(expert, WeightedExpert)
             assert expert.expert_function is not None
             assert expert.weight == 1.0
-            assert expert.is_fitted == False
-
-            # Test behavior: function is callable and can be executed
-            assert callable(expert.expert_function)
+            assert not expert.is_fitted
 
             # Test behavior: function modifies state in-place and returns None
             world_config = WorldConfig()
@@ -102,34 +93,37 @@ class TestSimple1DExpertSynthesizer:
             result = expert.expert_function(test_state, Action.MOVE_RIGHT)
             assert result is None
 
+    @pytest.mark.flaky(retries=3, delay=0.25)
     @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        not os.environ.get("GEMINI_API_KEY"),
+        reason="GEMINI_API_KEY not available",
+    )
     async def test_synthesize_experts_handles_malformed_llm_responses_gracefully(self):
         """Test that malformed LLM responses don't crash the synthesizer."""
         # Skip if no API key is available
-        import os
-
-        if not os.environ.get("GEMINI_API_KEY"):
-            pytest.skip("GEMINI_API_KEY not available")
-
-        synthesizer = Simple1DExpertSynthesizer()
+        synthesizer = Simple1DExpertSynthesizer(
+            dependencies_provider=Simple1DSynthesisDependenciesProvider()
+        )
 
         # This test would require mocking the LLM to return malformed responses
         # For now, we just verify the method exists and can be called
         assert hasattr(synthesizer, "synthesize_experts")
         assert callable(synthesizer.synthesize_experts)
 
+    @pytest.mark.flaky(retries=3, delay=0.25)
     @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        not os.environ.get("GEMINI_API_KEY"),
+        reason="GEMINI_API_KEY not available",
+    )
     async def test_synthesize_experts_handles_light_object_type(
         self, player_movement_scenario
     ):
         """Test that synthesizer can handle light object types."""
-        # Skip if no API key is available
-        import os
-
-        if not os.environ.get("GEMINI_API_KEY"):
-            pytest.skip("GEMINI_API_KEY not available")
-
-        synthesizer = Simple1DExpertSynthesizer()
+        synthesizer = Simple1DExpertSynthesizer(
+            dependencies_provider=Simple1DSynthesisDependenciesProvider()
+        )
         experts = await synthesizer.synthesize_experts(
             transitions=[player_movement_scenario],
             object_type="light",
