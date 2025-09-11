@@ -138,8 +138,8 @@ def test():
     bad_expert_weight = None
     for weighted_expert in weighted_experts:
         if (
-            weighted_expert.expert_function
-            == incorrect_entity_lifecycle_expert_spurious_spawning
+            weighted_expert.expert_function.__name__
+            == incorrect_entity_lifecycle_expert_spurious_spawning.__name__
         ):
             bad_expert_weight = weighted_expert.weight
             break

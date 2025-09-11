@@ -31,7 +31,9 @@ from .core import (
     SymbolicTransition,
     WeightedExpert,
 )
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, Callable
+from ..litellm_utils import NonStreamingModelResponse
+from .core import ExpertFunctionWrapper
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 
@@ -64,15 +66,21 @@ class GenericSynthesizer(Generic[SymbolicStateT]):
         self,
         dependencies_provider: SynthesisDependenciesProvider[SymbolicStateT],
         llm_params: Optional[GeminiLiteLlmParams] = None,
+        llm_client: Callable[
+            [LiteLlmRequest], NonStreamingModelResponse
+        ] = lambda request: request(),
     ):
         """
         Initialize the synthesizer.
 
         Args:
             llm_params: LLM parameters for synthesis. If None, uses default Gemini params.
+            llm_client: Callable that takes a LiteLlmRequest and returns a NonStreamingModelResponse.
+                This is mostly useful for testing, since it can be used to return a mocked response.
         """
         self.dependencies_provider = dependencies_provider
         self.llm_params = llm_params or GeminiLiteLlmParams()
+        self.llm_client = llm_client
 
     async def synthesize_experts(
         self,
@@ -144,7 +152,7 @@ class GenericSynthesizer(Generic[SymbolicStateT]):
         )
 
         try:
-            response = request()
+            response = self.llm_client(request)
             code = response.choices[0].message.content
 
             if not code:
@@ -242,10 +250,9 @@ class GenericSynthesizer(Generic[SymbolicStateT]):
             executor(code)
 
             # Extract the compiled function from the namespace
-            expert_function = executor.namespace[function_name]
+            compiled_function = executor.namespace[function_name]
 
-            # Set the expert source code
-            expert_function.__source_code__ = code
+            expert_function = ExpertFunctionWrapper(compiled_function, code)
 
             return expert_function
 

@@ -20,6 +20,13 @@ from distant_sunburn.poe_world.core import (
     WeightedExpert,
 )
 from distant_sunburn.litellm_utils import GeminiLiteLlmParams
+from distant_sunburn.litellm_utils import (
+    LiteLlmRequest,
+    NonStreamingModelResponse,
+    Choices,
+)
+from litellm import completion, mock_response
+from distant_sunburn.poe_world.core import ExpertFunctionWrapper
 
 
 class TestCrafterExpertSynthesizer:
@@ -184,3 +191,49 @@ async def test_synthesize_experts_integration(cow_attack_scenario):
 
         # The expert will have assigned a discrete distribution to the cow's health.
         assert isinstance(cow_state.health, DiscreteDistribution)
+
+
+@pytest.mark.asyncio
+async def test_synthesis_expert_serialization(cow_attack_scenario, tmp_path):
+    """
+    This tests that the synthesized experts can be serialized and deserialized.
+    """
+
+    expert_code = """
+def alter_cow_objects(current_state: WorldState, action: str) -> None:
+    if action == "do":
+        for entity in current_state.objects:
+            if entity.name == "cow":
+                entity.health = DiscreteDistribution(support=[max(0, entity.health - 2)])
+"""
+
+    def mock_llm_client(request: LiteLlmRequest) -> NonStreamingModelResponse:
+        response = completion(
+            model=request.params.model, messages=[], mock_response=expert_code
+        )
+        return NonStreamingModelResponse.model_validate(response, from_attributes=True)
+
+    synthesizer = CrafterExpertSynthesizer(
+        dependencies_provider=CrafterSynthesisDependenciesProvider(),
+        llm_client=mock_llm_client,
+    )
+    experts = await synthesizer.synthesize_experts(
+        transitions=[cow_attack_scenario],
+        object_type="cow",
+    )
+
+    assert len(experts) >= 0
+
+    # Now we make sure that the expert can be serialized and deserialized
+    expert = experts[0]
+    expert.expert_function.save(tmp_path / "expert.pkl")
+    loaded_expert = ExpertFunctionWrapper.load(tmp_path / "expert.pkl")
+
+    # Assert that executing the expert produces the same result as the original expert
+    test_state = cow_attack_scenario.prev_metadata.model_copy(deep=True)
+    loaded_expert(test_state, cow_attack_scenario.action)
+
+    test_state_2 = cow_attack_scenario.prev_metadata.model_copy(deep=True)
+    expert.expert_function(test_state_2, cow_attack_scenario.action)
+
+    assert test_state.objects[0].health == test_state_2.objects[0].health

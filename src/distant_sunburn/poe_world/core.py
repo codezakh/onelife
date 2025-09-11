@@ -25,6 +25,9 @@ from scipy.special import logsumexp
 
 from typing import Sequence, Callable
 import inspect
+from pathlib import Path
+import cloudpickle
+from ..typing_utils import implements
 
 # Type variable for the metadata type used by different environments
 MetadataT = TypeVar("MetadataT")
@@ -147,6 +150,14 @@ class ExpertFunction(Protocol[MetadataT_contra]):
         """The source code of the expert function."""
         ...
 
+    def save(self, path: str | Path) -> None: ...
+
+    @classmethod
+    def load(cls, path: str | Path) -> "ExpertFunction[MetadataT_contra]": ...
+
+    @property
+    def __name__(self) -> str: ...
+
 
 class ExpertFunctionWrapper(Generic[MetadataT_contra]):
     def __init__(
@@ -173,6 +184,49 @@ class ExpertFunctionWrapper(Generic[MetadataT_contra]):
     @property
     def __name__(self) -> str:
         return self.expert_func.__name__
+
+    def save(self, path: str | Path) -> None:
+        """
+        Serializes this ExpertFunctionWrapper instance to a file using cloudpickle.
+
+        Args:
+            file_path: The path where the serialized object will be saved.
+        """
+        if not isinstance(path, Path):
+            path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("wb") as f:
+            cloudpickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str | Path) -> "ExpertFunctionWrapper[MetadataT_contra]":
+        """
+        Deserializes an ExpertFunctionWrapper instance from a file using cloudpickle.
+
+        Args:
+            file_path: The path of the file to load.
+
+        Returns:
+            A new instance of ExpertFunctionWrapper.
+
+        Raises:
+            TypeError: If the unpickled object is not an instance of this class.
+        """
+        if not isinstance(path, Path):
+            path = Path(path)
+        with path.open("rb") as f:
+            instance = cloudpickle.load(f)
+
+        if not isinstance(instance, cls):
+            raise TypeError(
+                f"File '{path}' did not contain an instance of "
+                f"{cls.__name__}, but of {type(instance).__name__}."
+            )
+
+        return instance
+
+
+implements(ExpertFunction)(ExpertFunctionWrapper)
 
 
 @attrs.define(frozen=True)
