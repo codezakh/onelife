@@ -191,25 +191,7 @@ class TestExpertManager:
         assert isinstance(log_prob, float)
         assert not (log_prob != log_prob)  # Not NaN
 
-    def test_save_checkpoint(self, tmp_path):
-        """Test that checkpoint can be saved successfully."""
-        # Add experts and fit weights
-        experts = [
-            WeightedExpert(expert_function=expert, weight=1.0)
-            for expert in ALL_EXPERTS[:3]
-        ]
-        self.manager.add_experts(experts)
-        self.manager.fit_weights(self.transitions, fast_mode=False)
-
-        # Save checkpoint
-        checkpoint_path = tmp_path / "test_checkpoint.safetensors"
-        self.manager.save(str(checkpoint_path))
-
-        # Check that file was created
-        assert checkpoint_path.exists()
-
-    def test_load_checkpoint_fails_without_experts(self, tmp_path):
-        """Test that loading checkpoint fails when no experts are present."""
+    def test_load_checkpoint_empty_manager(self, tmp_path):
         # Add experts and fit weights
         experts = [
             WeightedExpert(expert_function=expert, weight=1.0)
@@ -229,10 +211,21 @@ class TestExpertManager:
             weight_threshold=0.5,
         )
 
-        # Load should fail initially (no experts to match weights)
-        assert not new_manager.load(str(checkpoint_path))
+        # Load should work
+        new_manager.load(str(checkpoint_path))
 
-    def test_load_checkpoint_restores_state(self, tmp_path):
+        assert len(new_manager.get_experts()) == len(experts)
+        for saved_expert, loaded_expert in zip(
+            self.manager.get_experts(), new_manager.get_experts()
+        ):
+            assert saved_expert.weight == loaded_expert.weight
+            assert saved_expert.is_fitted == loaded_expert.is_fitted
+            assert (
+                saved_expert.expert_function.__name__
+                == loaded_expert.expert_function.__name__
+            )
+
+    def test_load_checkpoint_non_empty_manager(self, tmp_path):
         """Test that loading checkpoint restores manager state correctly."""
         # Add experts and fit weights
         experts = [
@@ -246,7 +239,7 @@ class TestExpertManager:
         checkpoint_path = tmp_path / "test_checkpoint.safetensors"
         self.manager.save(str(checkpoint_path))
 
-        # Create new manager and add same experts
+        # Create new manager without experts
         new_manager = ExpertManager(
             observable_extractor=self.observable_extractor,
             weight_fitter=self.weight_fitter,
@@ -255,7 +248,7 @@ class TestExpertManager:
         new_manager.add_experts(experts)
 
         # Load checkpoint
-        assert new_manager.load(str(checkpoint_path))
+        new_manager.load(str(checkpoint_path))
 
         # Check that weight threshold was restored
         assert abs(new_manager.weight_threshold - 0.01) < 1e-6

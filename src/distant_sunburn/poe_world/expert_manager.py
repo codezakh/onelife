@@ -12,9 +12,17 @@ from typing import Generic, List, TypeVar
 import torch
 from loguru import logger
 
-from .core import SymbolicTransition, WeightedExpert, ObservableExtractorProtocol
+from .core import (
+    SymbolicTransition,
+    WeightedExpert,
+    ObservableExtractorProtocol,
+    ExpertFunctionWrapper,
+)
 from .weight_fitter import MaxLikelihoodWeightFitter
 from .world_model import PoEWorldModel
+import safetensors.torch
+from pathlib import Path
+import safetensors
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 ActionT = TypeVar("ActionT")
@@ -214,14 +222,13 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
         Args:
             checkpoint_path: Path to save the checkpoint
         """
-        # NOTE: No error handling implemented - errors from file operations
-        # or serialization will propagate up to the caller
+        ckpt_dir = Path(checkpoint_path)
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+        # Saving the state requires both saving some tensors
+        # as well as the expert functions themselves.
 
-        # Prepare checkpoint data
-        checkpoint_data = {
+        tensors = {
             "weight_threshold": torch.tensor([self.weight_threshold]),
             "expert_weights": torch.tensor(
                 [expert.weight for expert in self.world_model.experts]
@@ -231,14 +238,13 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
             ),
         }
 
-        # Save using safetensors
-        from safetensors.torch import save_file
+        safetensors.torch.save_file(tensors, ckpt_dir / "checkpoint.safetensors")
 
-        save_file(checkpoint_data, checkpoint_path)
+        # Now we save each of the experts
+        for idx, expert in enumerate(self.world_model.experts):
+            expert.expert_function.save(ckpt_dir / f"expert_{idx}.pkl")
 
-        logger.info(f"Saved checkpoint to {checkpoint_path}")
-
-    def load(self, checkpoint_path: str) -> bool:
+    def load(self, checkpoint_path: str):
         """
         Load manager state from checkpoint.
 
@@ -248,64 +254,43 @@ class ExpertManager(Generic[SymbolicStateT, ActionT]):
         Returns:
             True if load successful, False otherwise
         """
-        # NOTE: No error handling implemented - errors from file operations
-        # or deserialization will propagate up to the caller
+        ckpt_dir = Path(checkpoint_path)
 
-        if not os.path.exists(checkpoint_path):
-            logger.warning(f"Checkpoint file not found: {checkpoint_path}")
-            return False
+        with safetensors.safe_open(
+            ckpt_dir / "checkpoint.safetensors", framework="pt", device="cpu"
+        ) as f:
+            # Load basic data
+            weight_threshold = f.get_tensor("weight_threshold").item()
+            expert_weights = f.get_tensor("expert_weights").numpy()
+            expert_is_fitted = f.get_tensor("expert_is_fitted").numpy()
 
-        try:
-            # Load using safetensors
-            from safetensors import safe_open
+        # Validate tensor lengths match
+        assert (
+            expert_weights.shape == expert_is_fitted.shape
+        ), f"expert_weights shape ({expert_weights.shape}) != expert_is_fitted shape ({expert_is_fitted.shape})"
 
-            with safe_open(checkpoint_path, framework="pt", device="cpu") as f:
-                # Load basic data
-                weight_threshold = f.get_tensor("weight_threshold").item()
-                expert_weights = f.get_tensor("expert_weights").numpy()
+        self.weight_threshold = weight_threshold
 
-                # Load is_fitted status - this field is required
-                try:
-                    expert_is_fitted = f.get_tensor("expert_is_fitted").numpy()
-                except KeyError:
-                    raise ValueError(
-                        f"Checkpoint {checkpoint_path} is missing required 'expert_is_fitted' field. "
-                        "This indicates an incompatible checkpoint format."
-                    )
+        expert_functions: list[ExpertFunctionWrapper] = []
+        for idx in range(len(expert_weights)):
+            expert_functions.append(
+                ExpertFunctionWrapper.load(ckpt_dir / f"expert_{idx}.pkl")
+            )
 
-            # Validate tensor lengths match
-            if len(expert_weights) != len(expert_is_fitted):
-                raise ValueError(
-                    f"Checkpoint tensor length mismatch: expert_weights has {len(expert_weights)} "
-                    f"elements but expert_is_fitted has {len(expert_is_fitted)} elements"
-                )
+        assert len(expert_functions) == len(
+            expert_weights
+        ), f"num of expert weights ({len(expert_weights)}) != num of expert functions ({len(expert_functions)})"
 
-            # Update manager state
-            self.weight_threshold = weight_threshold
+        # Update expert weights in world model
+        updated_experts: list[WeightedExpert] = []
+        for i, expert_fn in enumerate(expert_functions):
+            updated_expert = WeightedExpert(
+                expert_function=expert_fn,
+                weight=float(expert_weights[i]),
+                is_fitted=bool(expert_is_fitted[i]),
+            )
+            updated_experts.append(updated_expert)
 
-            # Update expert weights in world model
-            if len(expert_weights) == len(self.world_model.experts):
-                updated_experts = []
-                for i, expert in enumerate(self.world_model.experts):
-                    updated_expert = WeightedExpert(
-                        expert_function=expert.expert_function,
-                        weight=float(expert_weights[i]),
-                        is_fitted=bool(expert_is_fitted[i]),
-                    )
-                    updated_experts.append(updated_expert)
+        self.world_model = PoEWorldModel(self.observable_extractor, updated_experts)
 
-                self.world_model = PoEWorldModel(
-                    self.observable_extractor, updated_experts
-                )
-
-                logger.info(f"Loaded checkpoint from {checkpoint_path}")
-                return True
-            else:
-                logger.error(
-                    f"Checkpoint expert count mismatch: expected {len(self.world_model.experts)}, got {len(expert_weights)}"
-                )
-                return False
-
-        except Exception as e:
-            logger.error(f"Failed to load checkpoint {checkpoint_path}: {e}")
-            return False
+        logger.info(f"Loaded checkpoint from {checkpoint_path}")
