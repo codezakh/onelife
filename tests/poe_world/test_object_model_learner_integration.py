@@ -24,7 +24,10 @@ from distant_sunburn.poe_world.object_model_learner import (
 )
 from distant_sunburn.poe_world.weight_fitter import MaxLikelihoodWeightFitter
 from distant_sunburn.poe_world.crafter.observable_extractor import ObservableExtractor
-from distant_sunburn.poe_world.crafter.synthesizer import CrafterExpertSynthesizer
+from distant_sunburn.poe_world.crafter.synthesizer import (
+    CrafterExpertSynthesizer,
+    CrafterSynthesisDependenciesProvider,
+)
 from crafter.state_export import WorldState
 from crafter.functional_env import (
     initial_state,
@@ -132,8 +135,13 @@ def test_crafter_integration_with_real_synthesizer(tmp_path: Path):
     )
 
     # Create real synthesizers (LLM-based)
-    non_creation_synthesizer = CrafterExpertSynthesizer()
-    creation_synthesizer = CrafterExpertSynthesizer()
+    # NOTE: We intentionally create the same dependency provider her
+    non_creation_synthesizer = CrafterExpertSynthesizer(
+        dependencies_provider=CrafterSynthesisDependenciesProvider(),
+    )
+    creation_synthesizer = CrafterExpertSynthesizer(
+        dependencies_provider=CrafterSynthesisDependenciesProvider(),
+    )
 
     # Create learning config with low surprise threshold to trigger synthesis
     config = ObjectModelOrchestratorConfig(
@@ -247,8 +255,12 @@ def test_fast_inference_with_crafter_expert_manager(tmp_path: Path):
     )
 
     # Create real synthesizers
-    non_creation_synthesizer = CrafterExpertSynthesizer()
-    creation_synthesizer = CrafterExpertSynthesizer()
+    non_creation_synthesizer = CrafterExpertSynthesizer(
+        dependencies_provider=CrafterSynthesisDependenciesProvider(),
+    )
+    creation_synthesizer = CrafterExpertSynthesizer(
+        dependencies_provider=CrafterSynthesisDependenciesProvider(),
+    )
 
     # Create learning config
     config = ObjectModelOrchestratorConfig(

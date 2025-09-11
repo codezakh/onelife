@@ -15,9 +15,13 @@ import pytest
 from distant_sunburn.litellm_utils import GeminiLiteLlmParams
 from distant_sunburn.poe_world.core import SymbolicTransition, WeightedExpert
 from distant_sunburn.poe_world.crafter.observable_extractor import ObservableExtractor
-from distant_sunburn.poe_world.crafter.synthesizer import CrafterExpertSynthesizer
+from distant_sunburn.poe_world.crafter.synthesizer import (
+    CrafterExpertSynthesizer,
+    CrafterSynthesisDependenciesProvider,
+)
 from distant_sunburn.poe_world.crafter.creation_synthesizer import (
     CrafterCreationSynthesizer,
+    CrafterCreationSynthesisDependenciesProvider,
 )
 from distant_sunburn.poe_world.expert_manager import ExpertManager
 from distant_sunburn.poe_world.object_model_learner import (
@@ -81,8 +85,14 @@ def test_crafter_full_integration_two_obj_types(tmp_path):
         creation_mgr = ExpertManager(
             observable_extractor=extractor, weight_fitter=fitter, weight_threshold=0.01
         )
-        non_creation_syn = CrafterExpertSynthesizer(llm_params=llm_params)
-        creation_syn = CrafterCreationSynthesizer(llm_params=llm_params)
+        non_creation_syn = CrafterExpertSynthesizer(
+            llm_params=llm_params,
+            dependencies_provider=CrafterSynthesisDependenciesProvider(),
+        )
+        creation_syn = CrafterCreationSynthesizer(
+            llm_params=llm_params,
+            dependencies_provider=CrafterCreationSynthesisDependenciesProvider(),
+        )
         config = ObjectModelOrchestratorConfig(
             batch_size=2, save_freq=10, surprise_threshold=-0.5
         )
