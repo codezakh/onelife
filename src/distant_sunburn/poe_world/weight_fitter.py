@@ -26,6 +26,7 @@ from .core import (
     WeightFitterProtocol,
     ObservableId,
 )
+from tqdm.auto import tqdm
 
 
 def combine_expert_predictions_for_attr(
@@ -276,7 +277,10 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
 
         # Set up L-BFGS optimizer
         optimizer = optim.LBFGS(
-            [weights], lr=self.learning_rate, line_search_fn="strong_wolfe"
+            [weights],
+            lr=self.learning_rate,
+            line_search_fn="strong_wolfe",
+            max_iter=5,
         )
 
         def closure():
@@ -289,6 +293,8 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
             # Compute negative log-likelihood loss
             loss = self._compute_loss(weights, sampled_transitions, sampled_predictions)
 
+            logger.info(f"Loss: {loss.item():.6f}")
+
             # Add L1 regularization
             l1_penalty = self.l1_weight * torch.abs(weights).sum()
             total_loss = loss + l1_penalty
@@ -297,10 +303,13 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
             return total_loss
 
         # Run optimization
-        for iteration in range(self.max_iterations):
+        for iteration in tqdm(
+            range(self.max_iterations),
+            desc="Fitting weights",
+            total=self.max_iterations,
+        ):
             loss = optimizer.step(closure)
-            if iteration % 10 == 0:
-                logger.debug(f"Iteration {iteration}, Loss: {loss.item():.6f}")
+            logger.info(f"Iteration {iteration}, Loss: {loss.item():.6f}")
 
         # Create weighted experts with final weights
         final_weights = weights.detach().numpy()
@@ -333,7 +342,7 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
             list[dict[ObservableId, DiscreteDistribution]]
         ] = []
 
-        for transition in transitions:
+        for transition in tqdm(transitions, desc="Precomputing expert predictions"):
             preds_for_transition: list[dict[ObservableId, DiscreteDistribution]] = []
 
             # Each expert make a prediction for all observable attributes
@@ -400,9 +409,6 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
                 except KeyError:
                     # Skip loss computation for attributes that experts didn't predict
                     # This typically happens when entities spawn/despawn between states
-                    logger.debug(
-                        f"Skipping loss computation for {attr_name} in transition {i}, likely due to entity spawn/despawn"
-                    )
                     continue
 
         return total_loss
