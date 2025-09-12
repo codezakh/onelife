@@ -30,13 +30,13 @@ from distant_sunburn.poe_world.object_model_learner import (
 )
 from distant_sunburn.poe_world.poe_world_learner import PoEWorldLearner
 from distant_sunburn.poe_world.weight_fitter import MaxLikelihoodWeightFitter
-from external.crafter_refactored.crafter.functional_env import (
+from crafter.functional_env import (
     initial_state,
     transition,
 )
-from external.crafter_refactored.crafter.state_export import WorldState
+from crafter.state_export import WorldState
 from distant_sunburn.evaluator.crafter.utils import MAP_ACTION_TO_INDEX
-from external.crafter_refactored.crafter.constants import ActionT
+from crafter.constants import ActionT
 from distant_sunburn.poe_world.core import ExpertFunctionWrapper
 
 
