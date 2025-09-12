@@ -25,6 +25,7 @@ from .object_model_learner import (
     ObjectModelOrchestrator,
     ObjectTypeModel,
 )
+from typing import Sequence
 
 
 SymbolicStateT = TypeVar("SymbolicStateT")
@@ -75,7 +76,7 @@ class PoEWorldLearner(Generic[SymbolicStateT, ActionT]):
     # ----------------------------- Public API ----------------------------- #
 
     def synthesize_world_model(
-        self, transitions: List[SymbolicTransition[SymbolicStateT]]
+        self, transitions: Sequence[SymbolicTransition[SymbolicStateT]]
     ) -> WorldModelProtocol[SymbolicStateT]:
         """Run full learning across all orchestrators and compose a model.
 
