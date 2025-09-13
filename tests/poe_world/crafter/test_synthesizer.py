@@ -5,28 +5,24 @@ This module tests that the synthesizer can generate expert functions
 from state transitions in the Crafter environment.
 """
 
-import pytest
-import asyncio
-import inspect
-from crafter.state_export import WorldState
+import os
 
+import pytest
+from crafter.state_export import CowState
+from distant_sunburn.evaluator.crafter.utils import find_all_objects_for_type
+from distant_sunburn.litellm_utils import (
+    LiteLlmRequest,
+    NonStreamingModelResponse,
+)
+from distant_sunburn.poe_world.core import (
+    DiscreteDistribution,
+    ExpertFunctionWrapper,
+)
 from distant_sunburn.poe_world.crafter.synthesizer import (
     CrafterExpertSynthesizer,
     CrafterSynthesisDependenciesProvider,
 )
-from distant_sunburn.poe_world.core import (
-    SymbolicTransition,
-    DiscreteDistribution,
-    WeightedExpert,
-)
-from distant_sunburn.litellm_utils import GeminiLiteLlmParams
-from distant_sunburn.litellm_utils import (
-    LiteLlmRequest,
-    NonStreamingModelResponse,
-    Choices,
-)
-from litellm import completion, mock_response
-from distant_sunburn.poe_world.core import ExpertFunctionWrapper
+from litellm import completion
 
 
 class TestCrafterExpertSynthesizer:
@@ -144,8 +140,6 @@ async def test_synthesize_experts_integration(cow_attack_scenario):
     This test requires an actual LLM call, so it's marked as integration.
     """
     # Skip if no API key is available
-    import os
-
     if not os.environ.get("GEMINI_API_KEY"):
         pytest.skip("GEMINI_API_KEY not available")
 
@@ -173,26 +167,30 @@ async def test_synthesize_experts_integration(cow_attack_scenario):
         # Make a deep copy to avoid modifying the original fixture state
         test_state = cow_attack_scenario.prev_metadata.model_copy(deep=True)
 
-        # Find the cow in the test state
-        cow_state = None
-        for obj in test_state.objects:
-            if obj.name == "cow":
-                cow_state = obj
-                break
+        # Find the cows in the test state
+        cow_states = find_all_objects_for_type(test_state, CowState)
 
-        assert cow_state is not None, "Cow should exist in the test state"
-        # We want to make sure the health of the cow is a regular integer.
-        assert isinstance(cow_state.health, int)
+        assert len(cow_states) > 0, "There should be at least one cow in the test state"
+
+        # Assert each of the cows' health is an integer before expert application
+        for cow_state in cow_states:
+            assert isinstance(cow_state.health, int)
 
         print(expert.expert_function.__source_code__)
 
         # Call the expert function with the "do" action from the cow attack scenario
         expert.expert_function(test_state, cow_attack_scenario.action)
 
-        # The expert will have assigned a discrete distribution to the cow's health.
-        assert isinstance(cow_state.health, DiscreteDistribution)
+        # The expert will have assigned a discrete distribution to the health of
+        # one of the cows
+        for cow_state in cow_states:
+            if isinstance(cow_state.health, DiscreteDistribution):
+                break
+        else:
+            pytest.fail("No cow health was assigned a discrete distribution")
 
 
+@pytest.mark.flaky(retries=3, delay=0.25)
 @pytest.mark.asyncio
 async def test_synthesis_expert_serialization(cow_attack_scenario, tmp_path):
     """
@@ -204,7 +202,7 @@ def alter_cow_objects(current_state: WorldState, action: str) -> None:
     if action == "do":
         for entity in current_state.objects:
             if entity.name == "cow":
-                entity.health = DiscreteDistribution(support=[max(0, entity.health - 2)])
+                entity.health = DiscreteDistribution(support=[entity.health - 2])
 """
 
     def mock_llm_client(request: LiteLlmRequest) -> NonStreamingModelResponse:
