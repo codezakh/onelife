@@ -418,59 +418,14 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
                         pred[attr_name] for pred in transition_predictions
                     ]
 
-                    ## BEGIN DEBUG INSTRUMENTATION ##
-
-                    # Debug instrumentation: sample every 100 transitions to limit log volume
+                    # Debug instrumentation: disabled by default
                     if False:
-                        # 1) Check supports are identical across experts
-                        same_support = all(
-                            np.array_equal(attr_predictions[0].support, p.support)
-                            for p in attr_predictions[1:]
+                        self._debug_attr_loss_diagnostics(
+                            attr_name=attr_name,
+                            observed_value=observed_value,
+                            attr_predictions=attr_predictions,
+                            weights=weights,
                         )
-                        if not same_support:
-                            with logger.contextualize(attribute=str(attr_name)):
-                                logger.warning("Support mismatch across experts")
-
-                        # 2) Check observed value is in support
-                        try:
-                            observed_int = int(observed_value)
-                        except Exception:
-                            observed_int = observed_value
-                        support_set = set(attr_predictions[0].support.tolist())
-                        if observed_int not in support_set:
-                            with logger.contextualize(
-                                attribute=str(attr_name), observed=observed_int
-                            ):
-                                logger.warning("Observed outcome not in support")
-
-                        # 3) Check for non-finite logscores
-                        bad_experts = [
-                            idx
-                            for idx, p in enumerate(attr_predictions)
-                            if not np.isfinite(p.logscores).all()
-                        ]
-                        if bad_experts:
-                            with logger.contextualize(
-                                attribute=str(attr_name), experts=bad_experts
-                            ):
-                                logger.warning("Non-finite logscores present")
-
-                        # 4) Check combined raw logscore at observed index
-                        values_tensor, combined_logscores = (
-                            combine_expert_predictions_for_attr_torch(
-                                attr_predictions, weights
-                            )
-                        )
-                        mask = values_tensor == observed_int
-                        if mask.any():
-                            combined_obs = combined_logscores[mask][0]
-                            if not torch.isfinite(combined_obs):
-                                with logger.contextualize(attribute=str(attr_name)):
-                                    logger.warning(
-                                        "Combined raw logscore at observed index is -inf"
-                                    )
-
-                    ## END DEBUG INSTRUMENTATION ##
 
                     log_prob = compute_log_prob_for_attr_from_expert_predictions_torch(
                         attr_predictions, weights, observed_value
@@ -484,6 +439,62 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
                     continue
 
         return total_loss
+
+    def _debug_attr_loss_diagnostics(
+        self,
+        attr_name: ObservableId,
+        observed_value: int,
+        attr_predictions: list[DiscreteDistribution],
+        weights: torch.Tensor,
+    ) -> None:
+        """
+        Emit targeted diagnostics for a single attribute's loss computation.
+
+        Checks:
+        - Support equality across experts
+        - Observed value membership in support
+        - Non-finite logscores in any expert prediction
+        - Finiteness of combined raw logscore at the observed index
+        """
+        # 1) Check supports are identical across experts
+        same_support = all(
+            np.array_equal(attr_predictions[0].support, p.support)
+            for p in attr_predictions[1:]
+        )
+        if not same_support:
+            with logger.contextualize(attribute=str(attr_name)):
+                logger.warning("Support mismatch across experts")
+
+        # 2) Check observed value is in support
+        try:
+            observed_int = int(observed_value)
+        except Exception:
+            observed_int = observed_value
+        support_set = set(attr_predictions[0].support.tolist())
+        if observed_int not in support_set:
+            with logger.contextualize(attribute=str(attr_name), observed=observed_int):
+                logger.warning("Observed outcome not in support")
+
+        # 3) Check for non-finite logscores
+        bad_experts = [
+            idx
+            for idx, p in enumerate(attr_predictions)
+            if not np.isfinite(p.logscores).all()
+        ]
+        if bad_experts:
+            with logger.contextualize(attribute=str(attr_name), experts=bad_experts):
+                logger.warning("Non-finite logscores present")
+
+        # 4) Check combined raw logscore at observed index
+        values_tensor, combined_logscores = combine_expert_predictions_for_attr_torch(
+            attr_predictions, weights
+        )
+        mask = values_tensor == observed_int
+        if mask.any():
+            combined_obs = combined_logscores[mask][0]
+            if not torch.isfinite(combined_obs):
+                with logger.contextualize(attribute=str(attr_name)):
+                    logger.warning("Combined raw logscore at observed index is -inf")
 
 
 implements(WeightFitterProtocol)(MaxLikelihoodWeightFitter)
