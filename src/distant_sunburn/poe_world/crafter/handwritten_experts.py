@@ -23,11 +23,14 @@ from ..core import DiscreteDistribution
 from crafter.state_export import WorldState
 from crafter.constants import ActionT
 from ..core import ExpertFunctionWrapper
+from loguru import logger
 
 # Action types for Crafter
 # Action = Literal[
 #     "move_left", "move_right", "move_up", "move_down", "do", "sleep", "place", "make"
 # ]
+
+logger.disable(__name__)
 
 
 def correct_player_movement_expert(
@@ -70,7 +73,7 @@ def correct_player_movement_expert(
 
 
 def correct_combat_damage_expert(
-    current_state: WorldState, action: ActionT, **context: Any
+    current_state: WorldState, action: ActionT, focus: str = "all", **context: Any
 ) -> None:
     """
     Correct expert that models combat damage mechanics.
@@ -84,6 +87,7 @@ def correct_combat_damage_expert(
     Args:
         current_state: The current game state to modify in-place
         action: The action being taken
+        focus: Entity type to focus on ('all', 'cow', 'zombie', 'skeleton', etc.)
         **context: Additional context (unused)
     """
     if action != "do":
@@ -105,6 +109,10 @@ def correct_combat_damage_expert(
             break
 
     if target_entity:
+        # Check if we should focus on this entity type
+        if focus != "all" and target_entity.name != focus:
+            return  # Skip this entity if it doesn't match the focus
+
         # Calculate damage based on player's weapons
         base_damage = 1
         if current_state.player.inventory.wood_sword > 0:
@@ -120,7 +128,7 @@ def correct_combat_damage_expert(
 
 
 def correct_entity_ai_expert(
-    current_state: WorldState, action: ActionT, **context: Any
+    current_state: WorldState, action: ActionT, focus: str = "all", **context: Any
 ) -> None:
     """
     Correct expert that models entity AI behavior.
@@ -134,6 +142,7 @@ def correct_entity_ai_expert(
     Args:
         current_state: The current game state to modify in-place
         action: The action being taken (affects entity behavior)
+        focus: Entity type to focus on ('all', 'cow', 'zombie', 'skeleton', etc.)
         **context: Additional context (unused)
     """
     # Use the state's random number generator for deterministic behavior
@@ -142,83 +151,105 @@ def correct_entity_ai_expert(
     # Track total damage to player from all entities
     total_player_damage = 0
 
-    for entity in current_state.objects:
-        if entity.entity_id == current_state.player.entity_id:
-            continue  # Skip player
+    with logger.contextualize(focus=focus):
+        for entity in current_state.objects:
+            if entity.entity_id == current_state.player.entity_id:
+                continue  # Skip player
 
-        # Calculate distance to player
-        distance = abs(entity.position.x - current_state.player.position.x) + abs(
-            entity.position.y - current_state.player.position.y
-        )
+            # Calculate distance to player
+            distance = abs(entity.position.x - current_state.player.position.x) + abs(
+                entity.position.y - current_state.player.position.y
+            )
 
-        # Handle different entity types
-        if entity.name == "cow":
-            # Cows move randomly with 50% probability
-            if rng.uniform() < 0.5:
-                # Random direction
-                directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-                dx, dy = directions[rng.randint(0, 3)]
-                new_x = max(0, min(current_state.size[0] - 1, entity.position.x + dx))
-                new_y = max(0, min(current_state.size[1] - 1, entity.position.y + dy))
-                entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
-                entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
+            # Check if we should focus on this entity type
+            if focus != "all" and entity.name != focus:
+                continue  # Skip this entity if it doesn't match the focus
 
-        elif entity.name == "zombie":
-            # Zombies pursue players within 8 tiles
-            if distance <= 8 and rng.uniform() < 0.9:
-                # Move toward player
-                dx = np.sign(current_state.player.position.x - entity.position.x)
-                dy = np.sign(current_state.player.position.y - entity.position.y)
+            # Handle different entity types
+            if entity.name == "cow":
+                # Cows move randomly with 50% probability
+                if rng.uniform() < 0.5:
+                    # Random direction
+                    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+                    dx, dy = directions[rng.randint(0, 3)]
+                    new_x = max(
+                        0, min(current_state.size[0] - 1, entity.position.x + dx)
+                    )
+                    new_y = max(
+                        0, min(current_state.size[1] - 1, entity.position.y + dy)
+                    )
+                    entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
+                    entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
 
-                # Prefer movement along the longer axis
-                if abs(current_state.player.position.x - entity.position.x) > abs(
-                    current_state.player.position.y - entity.position.y
-                ):
-                    if rng.uniform() < 0.8:
-                        new_x = max(
-                            0, min(current_state.size[0] - 1, entity.position.x + dx)
-                        )
-                        entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
+            elif entity.name == "zombie":
+                # Zombies pursue players within 8 tiles
+                chase_roll = rng.uniform() < 0.9
+                long_axis_roll = rng.uniform() < 0.8
+                logger.debug(
+                    f"Zombie {entity.entity_id} chase_roll: {chase_roll}, long_axis_roll: {long_axis_roll}"
+                )
+                if distance <= 8 and chase_roll:
+                    # Move toward player
+                    dx = np.sign(current_state.player.position.x - entity.position.x)
+                    dy = np.sign(current_state.player.position.y - entity.position.y)
+
+                    # Prefer movement along the longer axis
+                    if abs(current_state.player.position.x - entity.position.x) > abs(
+                        current_state.player.position.y - entity.position.y
+                    ):
+                        if long_axis_roll:
+                            new_x = max(
+                                0,
+                                min(current_state.size[0] - 1, entity.position.x + dx),
+                            )
+                            entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
+                        else:
+                            new_y = max(
+                                0,
+                                min(current_state.size[1] - 1, entity.position.y + dy),
+                            )
+                            entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
                     else:
-                        new_y = max(
-                            0, min(current_state.size[1] - 1, entity.position.y + dy)
-                        )
-                        entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
-                else:
-                    if rng.uniform() < 0.8:
-                        new_y = max(
-                            0, min(current_state.size[1] - 1, entity.position.y + dy)
-                        )
-                        entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
-                    else:
-                        new_x = max(
-                            0, min(current_state.size[0] - 1, entity.position.x + dx)
-                        )
-                        entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
+                        if long_axis_roll:
+                            new_y = max(
+                                0,
+                                min(current_state.size[1] - 1, entity.position.y + dy),
+                            )
+                            entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
+                        else:
+                            new_x = max(
+                                0,
+                                min(current_state.size[0] - 1, entity.position.x + dx),
+                            )
+                            entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
 
-                        # Attack if adjacent (simplified - just damage player)
-                if distance <= 1:
-                    damage = 7 if current_state.player.sleeping else 2
-                    total_player_damage += damage
+                    # Attack if adjacent (simplified - just damage player)
+                    if distance <= 1:
+                        damage = 7 if current_state.player.sleeping else 2
+                        total_player_damage += damage
 
-        elif entity.name == "skeleton":
-            # Skeletons flee when close, shoot when in range
-            if distance <= 3:
-                # Flee from player
-                dx = np.sign(entity.position.x - current_state.player.position.x)
-                dy = np.sign(entity.position.y - current_state.player.position.y)
-                new_x = max(0, min(current_state.size[0] - 1, entity.position.x + dx))
-                new_y = max(0, min(current_state.size[1] - 1, entity.position.y + dy))
-                entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
-                entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
-            elif distance <= 5 and rng.uniform() < 0.5:
-                # Shoot arrow (simplified - just damage player)
-                total_player_damage += 2
+            elif entity.name == "skeleton":
+                # Skeletons flee when close, shoot when in range
+                if distance <= 3:
+                    # Flee from player
+                    dx = np.sign(entity.position.x - current_state.player.position.x)
+                    dy = np.sign(entity.position.y - current_state.player.position.y)
+                    new_x = max(
+                        0, min(current_state.size[0] - 1, entity.position.x + dx)
+                    )
+                    new_y = max(
+                        0, min(current_state.size[1] - 1, entity.position.y + dy)
+                    )
+                    entity.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
+                    entity.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
+                elif distance <= 5 and rng.uniform() < 0.5:
+                    # Shoot arrow (simplified - just damage player)
+                    total_player_damage += 2
 
-    # Apply accumulated damage to player at the end
-    if total_player_damage > 0:
-        new_health = max(0, current_state.player.health - total_player_damage)
-        current_state.player.health = DiscreteDistribution(support=[new_health])  # type: ignore
+        # Apply accumulated damage to player at the end
+        if total_player_damage > 0:
+            new_health = max(0, current_state.player.health - total_player_damage)
+            current_state.player.health = DiscreteDistribution(support=[new_health])  # type: ignore
 
 
 def incorrect_player_movement_expert_teleports(
@@ -347,18 +378,6 @@ def incorrect_entity_lifecycle_expert_spurious_spawning(
             if entity.name == "skeleton":
                 # Predict skeleton will exist with high health (wrong prediction)
                 entity.health = DiscreteDistribution(support=[30])  # type: ignore
-
-
-# Add __source_code__ property to all expert functions
-CallableT = TypeVar("CallableT", bound=Callable)
-
-
-def _add_source_code_to_expert(
-    expert_func: CallableT,
-) -> CallableT:
-    """Helper function to add __source_code__ property to expert functions."""
-    setattr(expert_func, "__source_code__", inspect.getsource(expert_func))
-    return expert_func
 
 
 # Collection of all experts for easy access
