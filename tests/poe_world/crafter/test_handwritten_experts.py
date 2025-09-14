@@ -29,9 +29,14 @@ from distant_sunburn.poe_world.crafter.handwritten_experts import (
 from distant_sunburn.poe_world.core import DiscreteDistribution
 from loguru import logger
 import distant_sunburn.poe_world.crafter.handwritten_experts
+import pytest
 
 
-logger.enable(distant_sunburn.poe_world.crafter.handwritten_experts.__name__)
+@pytest.fixture(autouse=True)
+def enable_logging():
+    logger.enable(distant_sunburn.poe_world.crafter.handwritten_experts.__name__)
+    yield
+    logger.disable(distant_sunburn.poe_world.crafter.handwritten_experts.__name__)
 
 
 def create_simple_test_state() -> WorldState:

@@ -1,43 +1,44 @@
-from distant_sunburn.poe_world.crafter.handwritten_experts import (
-    CORRECT_EXPERTS,
-)
+import itertools
+from collections import Counter, defaultdict
+from pathlib import Path
+
+import numpy as np
+from crafter.constants import ActionT as CrafterAction
+from crafter.state_export import WorldState
+from loguru import logger
+from rich.columns import Columns
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from distant_sunburn.evaluator.core import SymbolicTransition
 from distant_sunburn.evaluator.crafter.scenarios import (
-    PlayerDeathScenario,
     CowMovementScenario,
     EatCowScenario,
-    ZombieDefeatScenario,
+    PlayerDeathScenario,
     RandomMovementScenario,
+    ZombieDefeatScenario,
     run_scenarios,
 )
-from distant_sunburn.evaluator.core import SymbolicTransition
-from crafter.state_export import WorldState
-from crafter.constants import ActionT as CrafterAction
-from loguru import logger
-from distant_sunburn.poe_world.weight_fitter import MaxLikelihoodWeightFitter
-from distant_sunburn.poe_world.crafter.observable_extractor import ObservableExtractor
-from distant_sunburn.poe_world.poe_world_learner import PoEWorldLearner
-from distant_sunburn.poe_world.object_model_learner import ObjectModelOrchestrator
-from distant_sunburn.poe_world.expert_manager import ExpertManager
-from distant_sunburn.poe_world.synthesizer import NoOpSynthesizer
-from distant_sunburn.poe_world.object_model_learner import ObjectModelOrchestratorConfig
-from pathlib import Path
-from distant_sunburn.poe_world.core import WeightedExpert
+from distant_sunburn.poe_world.core import ObservableId, WeightedExpert
 from distant_sunburn.poe_world.core import (
     SymbolicTransition as PoEWorldSymbolicTransition,
 )
-from loguru import logger
-import itertools
-from distant_sunburn.poe_world.core import ObservableId
-from collections import defaultdict, Counter
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.columns import Columns
-
-# from distant_sunburn.poe_world.crafter.observable_extractor import (
-#     ObservableExtractorConfig,
-# )
-import numpy as np
+from distant_sunburn.poe_world.crafter.handwritten_experts import (
+    CORRECT_EXPERTS,
+)
+from distant_sunburn.poe_world.crafter.observable_extractor import (
+    ObservableExtractor,
+    ObservableExtractorConfig,
+)
+from distant_sunburn.poe_world.expert_manager import ExpertManager
+from distant_sunburn.poe_world.object_model_learner import (
+    ObjectModelOrchestrator,
+    ObjectModelOrchestratorConfig,
+)
+from distant_sunburn.poe_world.poe_world_learner import PoEWorldLearner
+from distant_sunburn.poe_world.synthesizer import NoOpSynthesizer
+from distant_sunburn.poe_world.weight_fitter import MaxLikelihoodWeightFitter
 
 
 def generate_training_transitions() -> (
@@ -62,20 +63,19 @@ def generate_training_transitions() -> (
     return transitions
 
 
-# extractor_config = ObservableExtractorConfig(
-#     position_domain=np.arange(0, 10),
-#     health_domain=np.arange(0, 10),
-#     entity_types=["cow", "zombie", "skeleton", "plant", "arrow", "fence"],
-#     entity_count_domain=np.arange(0, 5),
-#     entity_existence_domain=np.array([0, 1]),
-# )
+extractor_config = ObservableExtractorConfig(
+    position_domain=np.arange(0, 10),
+    health_domain=np.arange(0, 10),
+    entity_types=["cow", "zombie", "skeleton", "plant", "arrow", "fence"],
+    entity_count_domain=np.arange(0, 5),
+    entity_existence_domain=np.array([0, 1]),
+)
 
 
 def build_poe_world_learner(
     tmp_path: Path,
 ) -> PoEWorldLearner[WorldState, CrafterAction]:
-    # extractor = ObservableExtractor(config=extractor_config)
-    extractor = ObservableExtractor()
+    extractor = ObservableExtractor(config=extractor_config)
     fitter = MaxLikelihoodWeightFitter(observable_extractor=extractor, max_iterations=3)
     non_creation_mgr = ExpertManager(
         observable_extractor=extractor, weight_fitter=fitter, weight_threshold=0.01
@@ -107,7 +107,7 @@ def build_poe_world_learner(
     )
 
 
-def test_jumpy_posterior(tmp_path) -> dict[ObservableId, dict[int, int]]:
+def test_jumpy_posterior(tmp_path):
     learner = build_poe_world_learner(tmp_path)
     transitions = generate_training_transitions()
     logger.info(f"Generated {len(transitions)} transitions")
@@ -139,8 +139,7 @@ def test_jumpy_posterior(tmp_path) -> dict[ObservableId, dict[int, int]]:
     logger.info(f"Sampled {len(samples)} states")
 
     # Now we extract observables from the samples and compute the empirical posterior
-    extractor = ObservableExtractor()
-    # extractor = ObservableExtractor(config=extractor_config)
+    extractor = ObservableExtractor(config=extractor_config)
     observed_outcomes: dict[ObservableId, list[int]] = defaultdict(list)
     for sample in samples:
         outcomes_for_sample = extractor.get_observed_outcomes(sample)
@@ -149,7 +148,7 @@ def test_jumpy_posterior(tmp_path) -> dict[ObservableId, dict[int, int]]:
 
     # For each of the observables, we compute the empirical posterior (the observed values)
     console = Console()
-    empirical_posteriors: dict[ObservableId, dict[int, int]] = {}
+    empirical_counts: dict[ObservableId, dict[int, int]] = {}
 
     # Create panels for each observable's empirical posterior
     panels = []
@@ -157,7 +156,7 @@ def test_jumpy_posterior(tmp_path) -> dict[ObservableId, dict[int, int]]:
     for observable_id, values in observed_outcomes.items():
         # Count occurrences of each value
         value_counts = Counter(values)
-        empirical_posteriors[observable_id] = dict(value_counts)
+        empirical_counts[observable_id] = dict(value_counts)
 
         # Create a table for this observable
         table = Table(
@@ -206,4 +205,13 @@ def test_jumpy_posterior(tmp_path) -> dict[ObservableId, dict[int, int]]:
             if i + 2 < len(panels):
                 console.print()  # Add spacing between rows
 
-    return empirical_posteriors
+    # Now, we assert that the model puts a nontrivial weight on the
+    # possibility that the player is miraculously healed in the player death
+    # scenario.
+    player_health_counts = empirical_counts[ObservableId("player_health")]
+    player_health_posterior = np.zeros((max(player_health_counts.keys()) + 1))
+    for value, count in player_health_counts.items():
+        player_health_posterior[value] = count
+    player_health_posterior /= player_health_posterior.sum()
+    # Now we check that the P(player_health >0) is greater than 0.5
+    assert np.sum(player_health_posterior[1:]) > 0.5
