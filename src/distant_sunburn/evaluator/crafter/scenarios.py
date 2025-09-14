@@ -1925,3 +1925,43 @@ class WakeUpScenario:
 
 
 implements(Scenario)(WakeUpScenario)
+
+
+class PlayerDeathScenario:
+    def __init__(self):
+        self.max_steps = 1
+        self.logger = logger.bind(scenario="player_death")
+
+    @property
+    def name(self) -> str:
+        return "player_death"
+
+    def get_initial_state(self) -> WorldState:
+        world, player, view = create_collection_scenario_base_state("grass")
+
+        # Place the player in the middle of the world
+        player_utils.set_player_position(player, (5, 5))
+        player_utils.set_player_internal_stat(player, "health", 2)
+
+        # Place a zombie to the right of the player
+        zombie = world_utils.add_object_to_world(world, objects.Zombie, (6, 5), player)
+        zombie.cooldown = 0
+
+        state = export_world_state(world, view=view, step_count=0)
+        return state
+
+    def policy(self, state: WorldState) -> ActionT:
+        return "noop"
+
+    def goal_test(
+        self, transitions: list[SymbolicTransition[WorldState, CrafterAction]]
+    ) -> GoalChecked:
+
+        # Check that the health of the player is 0
+        player = transitions[-1].next_metadata.player
+        if player.health == 0:
+            return GoalChecked(True, "Player died")
+        return GoalChecked(False, "Player did not die")
+
+
+implements(Scenario)(PlayerDeathScenario)
