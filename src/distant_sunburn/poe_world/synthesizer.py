@@ -308,3 +308,20 @@ class GenericSynthesizer(Generic[SymbolicStateT]):
 
 
 implements(ExpertSynthesizerProtocol)(GenericSynthesizer)
+
+
+class NoOpSynthesizer(Generic[SymbolicStateT]):
+    """
+    A synthesizer that does nothing.
+    """
+
+    def __init__(self):
+        pass
+
+    async def synthesize_experts(
+        self, transitions: List[SymbolicTransition[SymbolicStateT]], object_type: str
+    ) -> List[WeightedExpert]:
+        return []
+
+
+implements(ExpertSynthesizerProtocol)(NoOpSynthesizer)
