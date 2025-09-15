@@ -24,6 +24,7 @@ dependencies = [
     # https://github.com/BerriAI/litellm/issues/13827
     "litellm==1.75",
     "loguru>=0.7.3",
+    "matplotlib>=3.10.6",
     "openai[balrog]>=1.90.0",
     "pandas>=2.3.1",
     "pydantic>=2.11.7",
@@ -33,6 +34,7 @@ dependencies = [
     "python-ulid>=3.0.0",
     "safetensors>=0.6.2",
     "scipy>=1.16.1",
+    "seaborn>=0.13.2",
     "setuptools>=79.0.1",
     "tenacity>=9.1.2",
     "tensordict>=0.9.1",
