@@ -26,6 +26,10 @@ from distant_sunburn.our_method.mixed_fsm_env.handwritten_laws import (
 )
 from distant_sunburn.our_method.core import LawFunctionWrapper, WeightedLaw
 from distant_sunburn.our_method.world_modeling import LawMixture
+from rich.console import Console
+from rich.table import Table
+from dataclasses import dataclass
+from collections import Counter
 
 
 def generate_random_data(
@@ -164,109 +168,59 @@ def test_weight_fitting_distinguishes_good_from_bad_experts():
     )
 
 
-def test_jumpy_posterior():
-    weighted_laws = [
-        WeightedLaw(law=fn, weight=1.0, is_fitted=True) for fn in CORRECT_LAWS
-    ]
-    world_model = LawMixture(
-        observable_extractor=ObservableExtractor(),
-        weighted_laws=weighted_laws,
-    )
+@dataclass
+class PosteriorOverAction:
+    deterministic_switch_posterior: np.ndarray
+    stochastic_switch_posterior: np.ndarray
+    static_switch_posterior: np.ndarray
 
-    n_samples = 100
 
-    seed = 42
-
+def compute_posterior_over_action(
+    action: Action,
+    world_model: LawMixture,
+    n_samples: int,
+    seed: int,
+) -> PosteriorOverAction:
     deterministic_switch_values: list[int] = []
     stochastic_switch_values: list[int] = []
     static_switch_values: list[int] = []
 
-    # for _ in range(n_samples):
-    #     state = initial_state(seed)
-    #     action = Action.TOGGLE_DETERMINISTIC_SWITCH
-    #     next_state = world_model.sample_next_state(state, action)
-    #     deterministic_switch_values.append(next_state.deterministic_switch)
-    #     stochastic_switch_values.append(next_state.stochastic_switch)
-    #     static_switch_values.append(next_state.static_switch)
-
     for _ in range(n_samples):
         state = initial_state(seed)
-        action = Action.TOGGLE_STOCHASTIC_SWITCH
         next_state = world_model.sample_next_state(state, action)
         deterministic_switch_values.append(next_state.deterministic_switch)
         stochastic_switch_values.append(next_state.stochastic_switch)
         static_switch_values.append(next_state.static_switch)
 
-    # for _ in range(n_samples):
-    #     state = initial_state(seed)
-    #     action = Action.TOGGLE_STATIC_SWITCH
-    #     next_state = world_model.sample_next_state(state, action)
-    #     deterministic_switch_values.append(next_state.deterministic_switch)
-    #     stochastic_switch_values.append(next_state.stochastic_switch)
-    #     static_switch_values.append(next_state.static_switch)
+    deterministic_switch_counts = Counter(deterministic_switch_values)
+    stochastic_switch_counts = Counter(stochastic_switch_values)
+    static_switch_counts = Counter(static_switch_values)
 
-    # Convert to numpy arrays for cleaner computation
-    deterministic_switch_array = np.array(deterministic_switch_values)
-    stochastic_switch_array = np.array(stochastic_switch_values)
-    static_switch_array = np.array(static_switch_values)
+    deterministic_switch_posterior = np.zeros(2)
+    stochastic_switch_posterior = np.zeros(2)
+    static_switch_posterior = np.zeros(2)
 
-    # Compute empirical posteriors using numpy
-    deterministic_switch_unique, deterministic_switch_counts = np.unique(
-        deterministic_switch_array, return_counts=True
-    )
-    stochastic_switch_unique, stochastic_switch_counts = np.unique(
-        stochastic_switch_array, return_counts=True
-    )
-    static_switch_unique, static_switch_counts = np.unique(
-        static_switch_array, return_counts=True
-    )
-
-    # Convert counts to probabilities
-    deterministic_switch_posterior = deterministic_switch_counts / len(
-        deterministic_switch_array
-    )
-    stochastic_switch_posterior = stochastic_switch_counts / len(
-        stochastic_switch_array
-    )
-    static_switch_posterior = static_switch_counts / len(static_switch_array)
-
-    # Assert that no single value has more than max concentration of probability mass
-    max_deterministic_switch_prob = np.max(deterministic_switch_posterior)
-    max_stochastic_switch_prob = np.max(stochastic_switch_posterior)
-    max_static_switch_prob = np.max(static_switch_posterior)
-
-    max_concentration = 0.80
+    for k, v in deterministic_switch_counts.items():
+        deterministic_switch_posterior[k] = v / n_samples
+    for k, v in stochastic_switch_counts.items():
+        stochastic_switch_posterior[k] = v / n_samples
+    for k, v in static_switch_counts.items():
+        static_switch_posterior[k] = v / n_samples
 
     # Display switch distributions in a clean 3x2 table
-    from rich.console import Console
-    from rich.table import Table
-
     console = Console()
-    table = Table(title="Switch Distributions", show_header=True)
+    table = Table(title=f"Switch Distributions for {action}", show_header=True)
     table.add_column("Switch", style="cyan")
     table.add_column("Initial", justify="center", style="white")
     table.add_column("Off (0)", justify="right", style="green")
     table.add_column("On (1)", justify="right", style="yellow")
 
-    # Extract probabilities for each switch value (0 or 1)
-    def extract_switch_probabilities(observed_values, probabilities):
-        value_to_probability = {
-            val: prob for val, prob in zip(observed_values, probabilities)
-        }
-        return value_to_probability.get(0, 0.0), value_to_probability.get(1, 0.0)
-
-    deterministic_off_prob, deterministic_on_prob = extract_switch_probabilities(
-        deterministic_switch_unique, deterministic_switch_posterior
-    )
-    stochastic_off_prob, stochastic_on_prob = extract_switch_probabilities(
-        stochastic_switch_unique, stochastic_switch_posterior
-    )
-    static_off_prob, static_on_prob = extract_switch_probabilities(
-        static_switch_unique, static_switch_posterior
-    )
+    deterministic_off_prob, deterministic_on_prob = deterministic_switch_posterior
+    stochastic_off_prob, stochastic_on_prob = stochastic_switch_posterior
+    static_off_prob, static_on_prob = static_switch_posterior
 
     # Get initial state values
-    initial_state_obj = initial_state(seed)
+    initial_state_obj = initial_state(0)
 
     table.add_row(
         "Deterministic",
@@ -289,14 +243,69 @@ def test_jumpy_posterior():
 
     console.print(table)
 
-    assert (
-        max_deterministic_switch_prob <= max_concentration
-    ), f"Deterministic switch has max probability {max_deterministic_switch_prob:.3f} > {max_concentration}. "
+    return PosteriorOverAction(
+        deterministic_switch_posterior,
+        stochastic_switch_posterior,
+        static_switch_posterior,
+    )
 
-    assert (
-        max_stochastic_switch_prob <= max_concentration
-    ), f"Stochastic switch has max probability {max_stochastic_switch_prob:.3f} > {max_concentration}. "
 
+def test_jumpy_posterior():
+    weighted_laws = [
+        WeightedLaw(law=fn, weight=1.0, is_fitted=True) for fn in CORRECT_LAWS
+    ]
+    world_model = LawMixture(
+        observable_extractor=ObservableExtractor(),
+        weighted_laws=weighted_laws,
+    )
+
+    n_samples = 100
+    seed = 42
+
+    toggle_deterministic_switch_posterior = compute_posterior_over_action(
+        Action.TOGGLE_DETERMINISTIC_SWITCH, world_model, n_samples, seed
+    )
+
+    # Deterministic switch should toggle from 0 --> 1 with high probability
     assert (
-        max_static_switch_prob <= max_concentration
-    ), f"Static switch has max probability {max_static_switch_prob:.3f} > {max_concentration}. "
+        toggle_deterministic_switch_posterior.deterministic_switch_posterior[1] >= 0.9
+    )
+
+    # Stochastic switch is never modified, so it should be 0 --> 0 with high probability
+    assert toggle_deterministic_switch_posterior.stochastic_switch_posterior[0] >= 0.9
+
+    # Static switch is never modified, so it should be 0 --> 0 with high probability
+    assert toggle_deterministic_switch_posterior.static_switch_posterior[0] >= 0.9
+
+    toggle_stochastic_switch_posterior = compute_posterior_over_action(
+        Action.TOGGLE_STOCHASTIC_SWITCH, world_model, n_samples, seed
+    )
+
+    # Deterministic switch is never modified, so it should be 0 --> 0 with high probability
+    assert toggle_stochastic_switch_posterior.deterministic_switch_posterior[0] >= 0.9
+
+    # Stochastic switch should be split between 0 and 1, with about equal probability
+    # for each
+    assert (
+        abs(
+            toggle_stochastic_switch_posterior.stochastic_switch_posterior[0]
+            - toggle_stochastic_switch_posterior.stochastic_switch_posterior[1]
+        )
+        <= 0.1
+    )
+
+    # Static switch is never modified, so it should be 0 --> 0 with high probability
+    assert toggle_stochastic_switch_posterior.static_switch_posterior[0] >= 0.9
+
+    toggle_static_switch_posterior = compute_posterior_over_action(
+        Action.TOGGLE_STATIC_SWITCH, world_model, n_samples, seed
+    )
+
+    # Deterministic switch is never modified, so it should be 0 --> 0 with high probability
+    assert toggle_static_switch_posterior.deterministic_switch_posterior[0] >= 0.9
+
+    # Stochastic switch is never modified, so it should be 0 --> 0 with high probability
+    assert toggle_static_switch_posterior.stochastic_switch_posterior[0] >= 0.9
+
+    # Static switch is never modified, so it should be 0 --> 0 with high probability
+    assert toggle_static_switch_posterior.static_switch_posterior[0] >= 0.9

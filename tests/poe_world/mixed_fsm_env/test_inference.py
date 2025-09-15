@@ -247,6 +247,57 @@ def test_jumpy_posterior():
 
     max_concentration = 0.80
 
+    # Display switch distributions in a clean 3x2 table
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+    table = Table(title="Switch Distributions", show_header=True)
+    table.add_column("Switch", style="cyan")
+    table.add_column("Initial", justify="center", style="white")
+    table.add_column("Off (0)", justify="right", style="green")
+    table.add_column("On (1)", justify="right", style="yellow")
+
+    # Extract probabilities for each switch value (0 or 1)
+    def extract_switch_probabilities(observed_values, probabilities):
+        value_to_probability = {
+            val: prob for val, prob in zip(observed_values, probabilities)
+        }
+        return value_to_probability.get(0, 0.0), value_to_probability.get(1, 0.0)
+
+    deterministic_off_prob, deterministic_on_prob = extract_switch_probabilities(
+        deterministic_switch_unique, deterministic_switch_posterior
+    )
+    stochastic_off_prob, stochastic_on_prob = extract_switch_probabilities(
+        stochastic_switch_unique, stochastic_switch_posterior
+    )
+    static_off_prob, static_on_prob = extract_switch_probabilities(
+        static_switch_unique, static_switch_posterior
+    )
+
+    # Get initial state values
+    initial_state_obj = initial_state(seed)
+
+    table.add_row(
+        "Deterministic",
+        str(initial_state_obj.deterministic_switch),
+        f"{deterministic_off_prob:.3f}",
+        f"{deterministic_on_prob:.3f}",
+    )
+    table.add_row(
+        "Stochastic",
+        str(initial_state_obj.stochastic_switch),
+        f"{stochastic_off_prob:.3f}",
+        f"{stochastic_on_prob:.3f}",
+    )
+    table.add_row(
+        "Static",
+        str(initial_state_obj.static_switch),
+        f"{static_off_prob:.3f}",
+        f"{static_on_prob:.3f}",
+    )
+
+    console.print(table)
     assert (
         max_deterministic_switch_prob <= max_concentration
     ), f"Deterministic switch has max probability {max_deterministic_switch_prob:.3f} > {max_concentration}. "
@@ -258,10 +309,3 @@ def test_jumpy_posterior():
     assert (
         max_static_switch_prob <= max_concentration
     ), f"Static switch has max probability {max_static_switch_prob:.3f} > {max_concentration}. "
-
-    print(f"Deterministic switch values: {deterministic_switch_unique}")
-    print(f"Switch A posterior: {deterministic_switch_posterior}")
-    print(f"Stochastic switch values: {stochastic_switch_unique}")
-    print(f"Stochastic switch posterior: {stochastic_switch_posterior}")
-    print(f"Static switch values: {static_switch_unique}")
-    print(f"Static switch posterior: {static_switch_posterior}")
