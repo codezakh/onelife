@@ -28,6 +28,7 @@ from .core import (
 )
 from tqdm.auto import tqdm
 
+from typing import Sequence
 
 # Global floor for logscores to prevent -inf/NaN from propagating through PoE
 LOGSCORE_FLOOR = -50.0  # ~1.9e-22 probability
@@ -254,8 +255,8 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
 
     def fit(
         self,
-        experts: list[ExpertFunction[SymbolicStateT]],
-        transitions: list[SymbolicTransition[SymbolicStateT]],
+        experts: Sequence[ExpertFunction[SymbolicStateT]],
+        transitions: Sequence[SymbolicTransition[SymbolicStateT]],
     ) -> list[WeightedExpert]:
         """
         Fit expert weights using maximum likelihood estimation.
@@ -371,8 +372,8 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
 
     def _precompute_expert_predictions(
         self,
-        experts: list[ExpertFunction[SymbolicStateT]],
-        transitions: list[SymbolicTransition[SymbolicStateT]],
+        experts: Sequence[ExpertFunction[SymbolicStateT]],
+        transitions: Sequence[SymbolicTransition[SymbolicStateT]],
     ) -> list[list[dict[ObservableId, DiscreteDistribution]]]:
         """
         Precompute expert predictions for all transitions to avoid repeated execution.
@@ -406,9 +407,9 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
     def _compute_loss(
         self,
         weights: torch.Tensor,
-        transitions: list[SymbolicTransition[SymbolicStateT]],
-        expert_preds_per_transition: list[
-            list[dict[ObservableId, DiscreteDistribution]]
+        transitions: Sequence[SymbolicTransition[SymbolicStateT]],
+        expert_preds_per_transition: Sequence[
+            Sequence[dict[ObservableId, DiscreteDistribution]]
         ],
     ) -> torch.Tensor:
         """
@@ -528,9 +529,9 @@ class MaxLikelihoodWeightFitter(Generic[SymbolicStateT]):
 
     def build_loss_buckets(
         self,
-        transitions: list[SymbolicTransition[SymbolicStateT]],
-        expert_preds_per_transition: list[
-            list[dict[ObservableId, DiscreteDistribution]]
+        transitions: Sequence[SymbolicTransition[SymbolicStateT]],
+        expert_preds_per_transition: Sequence[
+            Sequence[dict[ObservableId, DiscreteDistribution]]
         ],
         device: torch.device | None = None,
     ) -> list[dict[str, torch.Tensor]]:
