@@ -253,7 +253,7 @@ def compute_posterior_over_action(
     )
 
 
-def test_jumpy_posterior():
+def test_posterior_good_experts_only():
     """
     This test checks that even in the case where we only have correct experts,
     the PoE-World inference algorithm puts a lot of probability mass on values that
@@ -325,7 +325,7 @@ def test_jumpy_posterior():
     assert toggle_static_switch_posterior.static_switch_posterior[0] >= 0.9
 
 
-def test_posterior_after_fitting():
+def test_posterior_after_fitting_all_experts():
     n_transitions = 100
     transitions = generate_random_data(n_transitions, seed=42)
 
