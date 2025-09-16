@@ -23,6 +23,7 @@ from distant_sunburn.evaluator import (
     Evaluator,
     NullWorldModel,
     TrueTransitionWorldModel,
+    EvaluationResults,
 )
 from distant_sunburn.evaluator.crafter.factory import CrafterEvaluationFactory
 from distant_sunburn.evaluator.crafter.components import _gamestate_to_json
@@ -90,6 +91,7 @@ def generate_random_data(
 def test():
     """Test that learned world model performs between null and true models."""
     env_config = EnvConfig(size=(9, 9), view=(9, 9))
+    num_eval_runs = 10
 
     # First we generate some data from a random policy and fit the world model.
     transitions = generate_random_data(env_config, n_transitions=100, policy_seed=42)
@@ -103,37 +105,6 @@ def test():
     )
 
     weighted_experts = fitter.fit(ALL_EXPERTS, transitions)  # type: ignore
-    learned_world_model = PoEWorldModel(
-        observable_extractor=ObservableExtractor(),
-        weighted_experts=weighted_experts,
-    )
-
-    # Now we create an evaluation factory for evaluating the world model.
-    evaluation_factory = CrafterEvaluationFactory(env_config=env_config, policy_seed=42)
-    evaluation_context = evaluation_factory.create_context(
-        config=EvaluationConfig(num_distractors=10), num_transitions_per_scenario=30
-    )
-
-    evaluator = Evaluator(evaluation_context)
-    with logger.contextualize(world_model="learned"):
-        learned_wm_perf = evaluator.evaluate(learned_world_model)
-
-    # Create true and null models for comparison
-    def equality_check(state1: WorldState, state2: WorldState) -> bool:
-        return _gamestate_to_json(state1) == _gamestate_to_json(state2)
-
-    def wrap_true_transition_fn(state: WorldState, action) -> WorldState:
-        next_state, _ = transition(state, MAP_ACTION_TO_INDEX[action])
-        return next_state
-
-    true_model = TrueTransitionWorldModel(wrap_true_transition_fn, equality_check)
-    null_model = NullWorldModel(equality_check)
-
-    with logger.contextualize(world_model="true"):
-        true_wm_perf = evaluator.evaluate(true_model)
-    with logger.contextualize(world_model="null"):
-        null_wm_perf = evaluator.evaluate(null_model)
-
     # Check that the bad entity lifecycle expert gets a low weight
     bad_expert_weight = None
     for weighted_expert in weighted_experts:
@@ -161,58 +132,132 @@ def test():
         expert_name = weighted_expert.expert_function.__name__
         print(f"  {expert_name}: {weighted_expert.weight}")
 
-    # Also check perf of random world model just for debugging purposes
-    random_world_model = RandomWorldModel()
-    with logger.contextualize(world_model="random"):
-        random_wm_perf = evaluator.evaluate(random_world_model)
+    learned_world_model = PoEWorldModel(
+        observable_extractor=ObservableExtractor(),
+        weighted_experts=weighted_experts,
+    )
 
-    # Print all performance metrics for debugging as a dictionary
+    # Create true and null models for comparison
+    def equality_check(state1: WorldState, state2: WorldState) -> bool:
+        return _gamestate_to_json(state1) == _gamestate_to_json(state2)
+
+    def wrap_true_transition_fn(state: WorldState, action) -> WorldState:
+        next_state, _ = transition(state, MAP_ACTION_TO_INDEX[action])
+        return next_state
+
+    true_model = TrueTransitionWorldModel(wrap_true_transition_fn, equality_check)
+    null_model = NullWorldModel(equality_check)
+    random_world_model = RandomWorldModel()
+
+    # Run evaluations multiple times with different seeds
+    learned_wm_perfs: list[EvaluationResults] = []
+    true_wm_perfs: list[EvaluationResults] = []
+    null_wm_perfs: list[EvaluationResults] = []
+    random_wm_perfs: list[EvaluationResults] = []
+
+    for run_idx in range(num_eval_runs):
+        # Use different seed for each evaluation run
+        eval_seed = 42 + run_idx
+
+        # Create evaluation factory with different seed for each run
+        evaluation_factory = CrafterEvaluationFactory(
+            env_config=env_config, policy_seed=eval_seed
+        )
+        evaluation_context = evaluation_factory.create_context(
+            config=EvaluationConfig(num_distractors=10), num_transitions_per_scenario=30
+        )
+        evaluator = Evaluator(evaluation_context)
+
+        # Evaluate all models with this seed
+        with logger.contextualize(world_model="learned", run=run_idx):
+            learned_wm_perf = evaluator.evaluate(learned_world_model)
+        learned_wm_perfs.append(learned_wm_perf)
+
+        with logger.contextualize(world_model="true", run=run_idx):
+            true_wm_perf = evaluator.evaluate(true_model)
+        true_wm_perfs.append(true_wm_perf)
+
+        with logger.contextualize(world_model="null", run=run_idx):
+            null_wm_perf = evaluator.evaluate(null_model)
+        null_wm_perfs.append(null_wm_perf)
+
+        with logger.contextualize(world_model="random", run=run_idx):
+            random_wm_perf = evaluator.evaluate(random_world_model)
+        random_wm_perfs.append(random_wm_perf)
+
+    # Calculate statistics for all metrics
+    def calculate_stats(values):
+        return {
+            "mean": round(float(np.mean(values)), 3),
+            "std": round(float(np.std(values)), 3),
+            "min": round(float(np.min(values)), 3),
+            "max": round(float(np.max(values)), 3),
+        }
+
+    # Extract metrics for each model type
+    def extract_metrics(perfs):
+        edit_distance_raw = [p.edit_distance.raw for p in perfs]
+        edit_distance_normalized = [p.edit_distance.normalized for p in perfs]
+        edit_distance_iou = [p.edit_distance.intersection_over_union for p in perfs]
+        discriminative_accuracy = [p.discriminative_accuracy for p in perfs]
+
+        return {
+            "edit_distance_raw": calculate_stats(edit_distance_raw),
+            "edit_distance_normalized": calculate_stats(edit_distance_normalized),
+            "edit_distance_iou": calculate_stats(edit_distance_iou),
+            "discriminative_accuracy": calculate_stats(discriminative_accuracy),
+        }
+
+    learned_stats = extract_metrics(learned_wm_perfs)
+    true_stats = extract_metrics(true_wm_perfs)
+    null_stats = extract_metrics(null_wm_perfs)
+    random_stats = extract_metrics(random_wm_perfs)
+
+    # Print all performance metrics with statistics
     rich.print(
         {
             "edit_distance": {
                 "raw": {
-                    "true_wm": true_wm_perf.edit_distance.raw,
-                    "null_wm": null_wm_perf.edit_distance.raw,
-                    "learned_wm": learned_wm_perf.edit_distance.raw,
-                    "random_wm": random_wm_perf.edit_distance.raw,
+                    "true_world_model": true_stats["edit_distance_raw"],
+                    "null_world_model": null_stats["edit_distance_raw"],
+                    "poe_world_model": learned_stats["edit_distance_raw"],
+                    "random_world_model": random_stats["edit_distance_raw"],
                 },
                 "normalized": {
-                    "true_wm": true_wm_perf.edit_distance.normalized,
-                    "null_wm": null_wm_perf.edit_distance.normalized,
-                    "learned_wm": learned_wm_perf.edit_distance.normalized,
-                    "random_wm": random_wm_perf.edit_distance.normalized,
+                    "true_world_model": true_stats["edit_distance_normalized"],
+                    "null_world_model": null_stats["edit_distance_normalized"],
+                    "poe_world_model": learned_stats["edit_distance_normalized"],
+                    "random_world_model": random_stats["edit_distance_normalized"],
                 },
                 "intersection_over_union": {
-                    "true_wm": true_wm_perf.edit_distance.intersection_over_union,
-                    "null_wm": null_wm_perf.edit_distance.intersection_over_union,
-                    "learned_wm": learned_wm_perf.edit_distance.intersection_over_union,
-                    "random_wm": random_wm_perf.edit_distance.intersection_over_union,
+                    "true_world_model": true_stats["edit_distance_iou"],
+                    "null_world_model": null_stats["edit_distance_iou"],
+                    "poe_world_model": learned_stats["edit_distance_iou"],
+                    "random_world_model": random_stats["edit_distance_iou"],
                 },
             },
             "discriminative_accuracy": {
-                "true_wm": true_wm_perf.discriminative_accuracy,
-                "null_wm": null_wm_perf.discriminative_accuracy,
-                "learned_wm": learned_wm_perf.discriminative_accuracy,
-                "random_wm": random_wm_perf.discriminative_accuracy,
+                "true_world_model": true_stats["discriminative_accuracy"],
+                "null_world_model": null_stats["discriminative_accuracy"],
+                "poe_world_model": learned_stats["discriminative_accuracy"],
+                "random_world_model": random_stats["discriminative_accuracy"],
             },
         }
     )
-    # Normally, we would assert that the learned model's mean generative error is lower
-    # than that of the null model. However, in this case the null model is actually better
-    # than the learned model, so we skip this assertion.
-    # assert (
-    #     learned_wm_perf.mean_generative_error < null_wm_perf.mean_generative_error
-    # ), "Learned model should have lower generative error than null model"
 
+    # Assertions based on mean values across all runs
     assert (
-        learned_wm_perf.discriminative_accuracy > null_wm_perf.discriminative_accuracy
+        learned_stats["discriminative_accuracy"]["mean"]
+        > null_stats["discriminative_accuracy"]["mean"]
     ), "Learned model should have higher discriminative accuracy than null model"
 
     # Assert that learned model underperforms true model
     assert (
-        learned_wm_perf.edit_distance.raw > true_wm_perf.edit_distance.raw
+        learned_stats["edit_distance_raw"]["mean"]
+        > true_stats["edit_distance_raw"]["mean"]
     ), "Learned model should have higher generative error than true model"
 
     assert (
-        learned_wm_perf.discriminative_accuracy < true_wm_perf.discriminative_accuracy
+        learned_stats["discriminative_accuracy"]["mean"]
+        < true_stats["discriminative_accuracy"]["mean"]
     ), "Learned model should have lower discriminative accuracy than true model"
