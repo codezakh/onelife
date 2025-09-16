@@ -9,70 +9,82 @@ from distant_sunburn.our_method.optimization import combine_expert_predictions_f
 
 
 @dataclass
-class TestState:
-    a: int
+class State:
+    attr: int
 
 
-class TestLawA:
-    def precondition(self, current_state: TestState, action: str) -> bool:
+class AlwaysOnHasEffectLaw:
+    def precondition(self, current_state: State, action: str) -> bool:
         return True
 
-    def effect(self, current_state: TestState, action: str) -> None:
-        current_state.a = DiscreteDistribution(support=[current_state.a + 1])  # type: ignore
+    def effect(self, current_state: State, action: str) -> None:
+        current_state.attr = DiscreteDistribution(support=[current_state.attr + 1])  # type: ignore
 
 
-class NoOpLaw:
-    def precondition(self, current_state: TestState, action: str) -> bool:
+class AlwaysOnNoEffectLaw:
+    def precondition(self, current_state: State, action: str) -> bool:
         return True
 
-    def effect(self, current_state: TestState, action: str) -> None:
+    def effect(self, current_state: State, action: str) -> None:
         pass
 
 
 @dataclass
-class TestObservableExtractor:
-    a_domain: np.ndarray = field(default_factory=lambda: np.arange(0, 10))
+class ObservableExtractor:
+    attr_domain: np.ndarray = field(default_factory=lambda: np.arange(0, 10))
 
     def extract_attribute_predictions(
-        self, state: TestState
+        self, state: State
     ) -> dict[ObservableId, DiscreteDistribution]:
         predictions: dict[ObservableId, DiscreteDistribution] = {}
 
-        if isinstance(state.a, DiscreteDistribution):
-            predictions[ObservableId("a")] = state.a.expand_support(self.a_domain)
+        if isinstance(state.attr, DiscreteDistribution):
+            predictions[ObservableId("attr")] = state.attr.expand_support(
+                self.attr_domain
+            )
         return predictions
 
-    def get_observed_outcomes(self, state: TestState) -> dict[ObservableId, int]:
+    def get_observed_outcomes(self, state: State) -> dict[ObservableId, int]:
         return {
-            ObservableId("a"): state.a,
+            ObservableId("attr"): state.attr,
         }
 
     def apply_expert_predictions(
         self,
-        new_state: TestState,
+        new_state: State,
         expert_predictions: dict[ObservableId, list[DiscreteDistribution]],
         weights: torch.Tensor,
-    ) -> TestState:
-        if "a" in expert_predictions:
-            a_preds = expert_predictions[ObservableId("a")]
+    ) -> State:
+        if "attr" in expert_predictions:
+            a_preds = expert_predictions[ObservableId("attr")]
             combined_dist = combine_expert_predictions_for_attr(a_preds, weights)
-            new_state.a = combined_dist.sample()
+            new_state.attr = combined_dist.sample()
 
         return new_state
 
 
-def test_sample_next_state():
-
-    law_a = LawFunctionWrapper.from_non_runtime_created(TestLawA())
-    no_op_law = LawFunctionWrapper.from_non_runtime_created(NoOpLaw())
+def test_sample_next_state_when_always_on_law_no_effect():
+    """
+    When there is a law that is always on but has no effect,
+    we should still be able to sample a next state.
+    This used to be broken and the test exists to ensure it doesn't break again.
+    """
 
     mixture = LawMixture(
-        observable_extractor=TestObservableExtractor(),
+        observable_extractor=ObservableExtractor(),
         weighted_laws=[
-            WeightedLaw(law=law_a, weight=1.0, is_fitted=True),
-            WeightedLaw(law=no_op_law, weight=1.0, is_fitted=True),
+            WeightedLaw(
+                law=LawFunctionWrapper.from_non_runtime_created(AlwaysOnHasEffectLaw()),
+                weight=1.0,
+                is_fitted=True,
+            ),
+            WeightedLaw(
+                law=LawFunctionWrapper.from_non_runtime_created(AlwaysOnNoEffectLaw()),
+                weight=1.0,
+                is_fitted=True,
+            ),
         ],
     )
 
-    state = TestState(a=0)
+    state = State(attr=0)
     mixture.sample_next_state(state, "action")
