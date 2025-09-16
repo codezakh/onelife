@@ -84,7 +84,20 @@ def combine_expert_predictions_for_attr(
 
     # Matrix multiplication: [n_values, n_experts] @ [n_experts] = [n_values]
     # This computes: combined_logscores[value] = sum(weight[i] * expert_logscore[i][value])
-    combined_logscores = logscores_matrix.T @ weights
+    try:
+        combined_logscores = logscores_matrix.T @ weights
+    except RuntimeError:
+        logger.opt(exception=True).error(
+            "Could not aggregate logscores",
+            extra={
+                "logscores_matrix": logscores_matrix.shape,
+                "weights": weights.shape,
+                "expert_predictions": [
+                    pred.logscores.shape for pred in expert_predictions
+                ],
+            },
+        )
+        raise
 
     # Return combined distribution using the same values as the first expert
     # WARNING: .detach().numpy() breaks gradient flow - use _torch version for optimization

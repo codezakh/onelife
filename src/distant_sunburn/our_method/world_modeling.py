@@ -1,4 +1,5 @@
 import copy
+from loguru import logger
 from collections import defaultdict
 from typing import Dict, Generic, TypeVar
 
@@ -63,29 +64,41 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
             # No experts - return current state unchanged
             return copy.deepcopy(current_state)
 
-        # Get expert predictions
-        active_law_indices, expert_predictions = self._get_law_predictions(
-            current_state, action
-        )
+        with logger.contextualize(action=action):
 
-        # Extract weights as tensor
-        weights = torch.tensor(
-            [
-                law.weight
-                for idx, law in enumerate(self._laws)
-                if idx in active_law_indices
-            ],
-            dtype=torch.float32,
-        )
+            # Get expert predictions
+            active_law_indices, expert_predictions = self._get_law_predictions(
+                current_state, action
+            )
 
-        # Create new state by sampling from combined distributions
-        new_state = copy.deepcopy(current_state)
+            active_laws = [self._laws[idx] for idx in active_law_indices]
+            logger.debug(
+                f"{len(active_laws)} active laws",
+                active_laws=[law.law.__name__ for law in active_laws],
+            )
 
-        new_state = self.observable_extractor.apply_expert_predictions(
-            new_state, expert_predictions, weights
-        )
+            with logger.contextualize(
+                active_laws=[law.law.__name__ for law in active_laws]
+            ):
 
-        return new_state
+                # Extract weights as tensor
+                weights = torch.tensor(
+                    [
+                        law.weight
+                        for idx, law in enumerate(self._laws)
+                        if idx in active_law_indices
+                    ],
+                    dtype=torch.float32,
+                )
+
+                # Create new state by sampling from combined distributions
+                new_state = copy.deepcopy(current_state)
+
+                new_state = self.observable_extractor.apply_expert_predictions(
+                    new_state, expert_predictions, weights
+                )
+
+                return new_state
 
     def evaluate_log_probability(
         self, state: SymbolicStateT, action: ActionT, next_state: SymbolicStateT

@@ -10,6 +10,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Optional
 from ..optimization import combine_expert_predictions_for_attr
+from loguru import logger
 
 
 # Define fixed domains for position and health attributes
@@ -193,54 +194,70 @@ class ObservableExtractor:
 
         # Sample player position
         if "player_position_x" in expert_predictions:
-            player_x_preds = expert_predictions[ObservableId("player_position_x")]
-            combined_dist = combine_expert_predictions_for_attr(player_x_preds, weights)
-            new_state.player.position.x = combined_dist.sample()
+            with logger.contextualize(attr_name="player_position_x"):
+                player_x_preds = expert_predictions[ObservableId("player_position_x")]
+                combined_dist = combine_expert_predictions_for_attr(
+                    player_x_preds, weights
+                )
+                new_state.player.position.x = combined_dist.sample()
 
         if "player_position_y" in expert_predictions:
-            player_y_preds = expert_predictions[ObservableId("player_position_y")]
-            combined_dist = combine_expert_predictions_for_attr(player_y_preds, weights)
-            new_state.player.position.y = combined_dist.sample()
+            with logger.contextualize(attr_name="player_position_y"):
+                player_y_preds = expert_predictions[ObservableId("player_position_y")]
+                combined_dist = combine_expert_predictions_for_attr(
+                    player_y_preds, weights
+                )
+                new_state.player.position.y = combined_dist.sample()
 
         # Sample player health
         if "player_health" in expert_predictions:
-            player_health_preds = expert_predictions[ObservableId("player_health")]
-            combined_dist = combine_expert_predictions_for_attr(
-                player_health_preds, weights
-            )
-            new_state.player.health = combined_dist.sample()
+            with logger.contextualize(attr_name="player_health"):
+                player_health_preds = expert_predictions[ObservableId("player_health")]
+                combined_dist = combine_expert_predictions_for_attr(
+                    player_health_preds, weights
+                )
+                new_state.player.health = combined_dist.sample()
 
         # Sample entity positions and health
         for entity in new_state.objects:
             if entity.entity_id == new_state.player.entity_id:
                 continue  # Skip player as we already handled it
 
-            # Entity position x
-            attr_name = f"entity_{entity.entity_id}_position_x"
-            if attr_name in expert_predictions:
-                entity_x_preds = expert_predictions[ObservableId(attr_name)]
-                combined_dist = combine_expert_predictions_for_attr(
-                    entity_x_preds, weights
-                )
-                entity.position.x = combined_dist.sample()
+            with logger.contextualize(
+                entity_name=entity.name, entity_id=entity.entity_id
+            ):
 
-            # Entity position y
-            attr_name = f"entity_{entity.entity_id}_position_y"
-            if attr_name in expert_predictions:
-                entity_y_preds = expert_predictions[ObservableId(attr_name)]
-                combined_dist = combine_expert_predictions_for_attr(
-                    entity_y_preds, weights
-                )
-                entity.position.y = combined_dist.sample()
+                # Entity position x
+                attr_name = f"entity_{entity.entity_id}_position_x"
+                if attr_name in expert_predictions:
+                    with logger.contextualize(attr_name=attr_name):
+                        entity_x_preds = expert_predictions[ObservableId(attr_name)]
+                        combined_dist = combine_expert_predictions_for_attr(
+                            entity_x_preds, weights
+                        )
+                        entity.position.x = combined_dist.sample()
 
-            # Entity health
-            attr_name = f"entity_{entity.entity_id}_health"
-            if attr_name in expert_predictions:
-                entity_health_preds = expert_predictions[ObservableId(attr_name)]
-                combined_dist = combine_expert_predictions_for_attr(
-                    entity_health_preds, weights
-                )
-                entity.health = combined_dist.sample()
+                # Entity position y
+                attr_name = f"entity_{entity.entity_id}_position_y"
+                if attr_name in expert_predictions:
+                    with logger.contextualize(attr_name=attr_name):
+                        entity_y_preds = expert_predictions[ObservableId(attr_name)]
+                        combined_dist = combine_expert_predictions_for_attr(
+                            entity_y_preds, weights
+                        )
+                        entity.position.y = combined_dist.sample()
+
+                # Entity health
+                attr_name = f"entity_{entity.entity_id}_health"
+                if attr_name in expert_predictions:
+                    with logger.contextualize(attr_name=attr_name):
+                        entity_health_preds = expert_predictions[
+                            ObservableId(attr_name)
+                        ]
+                        combined_dist = combine_expert_predictions_for_attr(
+                            entity_health_preds, weights
+                        )
+                        entity.health = combined_dist.sample()
 
         return new_state
 
