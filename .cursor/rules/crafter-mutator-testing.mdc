@@ -1,0 +1,57 @@
+---
+globs: tests/evaluator/mutators/*.py
+description: "Patterns for writing Crafter mutator tests"
+---
+
+# Crafter Mutator Testing Patterns
+
+## State Creation
+Always use the standard Crafter test pattern for creating world states:
+
+```python
+@pytest.fixture
+def test_state() -> tuple[WorldState, crafter_engine.World]:
+    view = (9, 9)
+    state = initial_state(area=(9, 9), view=view, seed=1)
+    world = reconstruct_world_from_state(state)
+    
+    player = find_player(world)
+    player_utils.set_player_position(player, (5, 5))
+    
+    # Clear all tiles to grass
+    for x in range(view[0]):
+        for y in range(view[1]):
+            world_utils.set_tile_material(world, (x, y), "grass")
+    
+    # Add entities using world_utils
+    world_utils.add_object_to_world(world, objects.Cow, (3, 3))
+    
+    return export_world_state(world, view=view, step_count=0), world
+```
+
+## Required Imports
+Always import these utilities:
+- `from crafter.functional_env import initial_state, reconstruct_world_from_state, export_world_state`
+- `from crafter.testing_helpers import player_utils, world_utils`
+- `from distant_sunburn.evaluator.crafter.utils import find_all_objects_for_type, find_player`
+
+## Finding Objects
+Use the evaluator utils instead of manual searching:
+```python
+# Good
+cows = find_all_objects_for_type(state, CowState)
+cow = cows[0]
+
+# Bad
+cow = next(entity for entity in state.objects if entity.name == "cow")
+```
+
+## Test Structure
+- Use `@pytest.fixture` for state creation
+- Return `tuple[WorldState, crafter_engine.World]` from fixtures
+- Use `state, _ = fixture_name` to unpack in tests
+- Test one behavior per test function
+- Use descriptive test names that explain the expected behavior
+
+## Examples
+See [test_movement.py](mdc:tests/evaluator/mutators/test_movement.py), [test_crafting.py](mdc:tests/evaluator/mutators/test_crafting.py), and [test_collection.py](mdc:tests/evaluator/mutators/test_collection.py) for reference implementations.
