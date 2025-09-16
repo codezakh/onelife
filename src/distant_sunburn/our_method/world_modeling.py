@@ -1,11 +1,13 @@
 import copy
+import itertools
 from loguru import logger
 from collections import defaultdict
 from typing import Dict, Generic, TypeVar
 
 import torch
 
-from distant_sunburn.poe_world.core import ObservableExtractorProtocol
+
+from .core import ObservableExtractorProtocol
 
 from ..typing_utils import implements
 from ..poe_world.core import (
@@ -16,6 +18,10 @@ from .optimization import (
     combine_expert_predictions_for_attr,
 )
 from .core import WeightedLaw, WorldModelProtocol
+from typing import TypeAlias
+
+
+ExpertIndex: TypeAlias = int
 
 
 # Constants for log probability values
@@ -67,11 +73,14 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
         with logger.contextualize(action=action):
 
             # Get expert predictions
-            active_law_indices, expert_predictions = self._get_law_predictions(
-                current_state, action
-            )
+            expert_predictions = self._get_law_predictions(current_state, action)
 
-            active_laws = [self._laws[idx] for idx in active_law_indices]
+            active_law_indices = {
+                _ for _ in itertools.chain.from_iterable(expert_predictions.values())
+            }
+
+            active_laws = [self._laws[_] for _ in active_law_indices]
+
             logger.debug(
                 f"{len(active_laws)} active laws",
                 active_laws=[law.law.__name__ for law in active_laws],
@@ -82,12 +91,17 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
             ):
 
                 # Extract weights as tensor
+                # weights = torch.tensor(
+                #     [
+                #         law.weight
+                #         for idx, law in enumerate(self._laws)
+                #         if idx in active_law_indices
+                #     ],
+                #     dtype=torch.float32,
+                # )
+
                 weights = torch.tensor(
-                    [
-                        law.weight
-                        for idx, law in enumerate(self._laws)
-                        if idx in active_law_indices
-                    ],
+                    [_.weight for _ in self._laws],
                     dtype=torch.float32,
                 )
 
@@ -118,15 +132,11 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
             return LOG_IMPOSSIBLE_VALUE
 
         # Get expert predictions
-        active_law_indices, law_predictions = self._get_law_predictions(state, action)
+        law_predictions = self._get_law_predictions(state, action)
 
         # Extract weights as tensor
         weights = torch.tensor(
-            [
-                law.weight
-                for idx, law in enumerate(self._laws)
-                if idx in active_law_indices
-            ],
+            [_.weight for _ in self._laws],
             dtype=torch.float32,
         )
 
@@ -138,9 +148,12 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
         # Evaluate log-probability for each attribute
         for attr_name, observed_value in observed_values.items():
             if attr_name in law_predictions:
-                attr_predictions = law_predictions[attr_name]
+                law_id_to_law_preds = law_predictions[attr_name]
+                active_indices = list(law_id_to_law_preds.keys())
+                active_weights = weights[active_indices]
+                raw_preds = list(law_id_to_law_preds.values())
                 combined_dist = combine_expert_predictions_for_attr(
-                    attr_predictions, weights
+                    raw_preds, active_weights
                 )
                 log_prob = combined_dist.evaluate_log_probability(observed_value)
                 total_log_prob += log_prob
@@ -149,7 +162,7 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
 
     def _get_law_predictions(
         self, state: SymbolicStateT, action: ActionT
-    ) -> tuple[set[int], dict[ObservableId, list[DiscreteDistribution]]]:
+    ) -> dict[ObservableId, dict[ExpertIndex, DiscreteDistribution]]:
         """
         Get predictions from all experts for the given state and action.
 
@@ -159,11 +172,9 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
             - Dictionary mapping attribute names to lists of law predictions
                 made by active laws
         """
-        preds_from_active_laws: dict[ObservableId, list[DiscreteDistribution]] = (
-            defaultdict(list)
-        )
-
-        active_law_indices: set[int] = set()
+        preds_from_active_laws: dict[
+            ObservableId, dict[ExpertIndex, DiscreteDistribution]
+        ] = defaultdict(dict)
 
         for law_idx, weighted_law in enumerate(self._laws):
             # Deep copy state and run expert
@@ -179,13 +190,11 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
                 state_copy
             )
 
-            active_law_indices.add(law_idx)
-
             # Group by attribute name
             for attr_name, attr_prediction in attr_predictions.items():
-                preds_from_active_laws[attr_name].append(attr_prediction)
+                preds_from_active_laws[attr_name][law_idx] = attr_prediction
 
-        return active_law_indices, preds_from_active_laws
+        return preds_from_active_laws
 
 
 implements(WorldModelProtocol)(LawMixture)

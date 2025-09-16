@@ -8,6 +8,10 @@ from ..typing_utils import implements
 import inspect
 from typing import Type
 from dataclasses import dataclass
+from ..poe_world.core import ObservableId, DiscreteDistribution
+import torch
+from typing import Mapping, TypeAlias
+
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 SymbolicStateT_contra = TypeVar("SymbolicStateT_contra", contravariant=True)
@@ -140,3 +144,90 @@ class LawOptimizerProtocol(Protocol[SymbolicStateT]):
         laws: list[LawProtocol[SymbolicStateT]],
         transitions: list[SymbolicTransition[SymbolicStateT]],
     ) -> list[WeightedLaw[SymbolicStateT]]: ...
+
+
+ExpertIndex: TypeAlias = int
+
+
+class ObservableExtractorProtocol(Protocol[SymbolicStateT]):
+    def extract_attribute_predictions(
+        self, state: SymbolicStateT
+    ) -> Mapping[ObservableId, DiscreteDistribution]:
+        """
+        Extract probabilistic predictions from a state after expert execution.
+
+        This method is called after experts have modified a state by assigning
+        DiscreteDistribution objects to attributes they have opinions about.
+        The method should:
+        1. Identify all observable attributes in the state
+        2. Extract DiscreteDistribution predictions where experts made them
+        3. Ensure all observable attributes are represented in the output
+
+        Args:
+            state: The symbolic state after expert execution. May contain both
+                   primitive values and DiscreteDistribution objects.
+
+        Returns:
+            Dictionary mapping ObservableId to DiscreteDistribution for each
+            observable attribute. All DiscreteDistribution objects should have
+            the same support (domain) for a given attribute across calls.
+        """
+        ...
+
+    def get_observed_outcomes(
+        self, state: SymbolicStateT
+    ) -> Mapping[ObservableId, int]:
+        """
+        Extract ground truth observed values from a symbolic state.
+
+        This method extracts the actual observed values from a state for use
+        in training and evaluation. It should return the same ObservableIds
+        as extract_attribute_predictions but with primitive integer values
+        instead of distributions.
+
+        Args:
+            state: The symbolic state containing ground truth values.
+                   Should contain only primitive values (no DiscreteDistribution).
+
+        Returns:
+            Dictionary mapping ObservableId to integer values for each
+            observable attribute.
+        """
+        ...
+
+    def apply_expert_predictions(
+        self,
+        new_state: SymbolicStateT,
+        expert_predictions: Mapping[
+            ObservableId, Mapping[ExpertIndex, DiscreteDistribution]
+        ],
+        weights: torch.Tensor,
+    ) -> SymbolicStateT:
+        """
+        Apply combined expert predictions to create a new state.
+
+        This method takes the predictions from multiple experts for each attribute,
+        combines them using the provided weights, and applies the results to
+        create a new state.
+
+        Args:
+            new_state: A copy of the current state to be modified. This state
+                       should contain primitive values and will be mutated in-place.
+            expert_predictions: Dictionary mapping ObservableId to dict of
+                               DiscreteDistribution predictions from each expert.
+                               Each dict should have the same length as the weights tensor.
+                               The keys of the dict are the indices of the experts.
+            weights: Tensor of expert weights [n_experts] with dtype=torch.float32.
+                     weights[i] determines how much expert i's prediction contributes.
+
+        Returns:
+            The modified state with sampled values from combined expert predictions.
+
+        Requirements:
+            - Must mutate new_state in-place and return it
+            - Must combine predictions using the provided weights
+            - Must sample from combined distributions to get concrete values
+            - Must convert sampled values to appropriate types (e.g., bool for boolean attributes)
+            - Must preserve state structure and handle missing predictions gracefully
+        """
+        ...

@@ -7,7 +7,7 @@ from distant_sunburn.our_method.core import LawFunctionWrapper, WeightedLaw
 from distant_sunburn.our_method.optimization import combine_expert_predictions_for_attr
 from distant_sunburn.our_method.world_modeling import LawMixture
 from distant_sunburn.poe_world.core import DiscreteDistribution, ObservableId
-from typing import TypeAlias
+from typing import TypeAlias, Mapping
 
 
 ExpertIndex: TypeAlias = int
@@ -57,7 +57,9 @@ class ObservableExtractor:
     def apply_expert_predictions(
         self,
         new_state: State,
-        expert_predictions: dict[ObservableId, dict[ExpertIndex, DiscreteDistribution]],
+        expert_predictions: Mapping[
+            ObservableId, Mapping[ExpertIndex, DiscreteDistribution]
+        ],
         weights: torch.Tensor,
     ) -> State:
         if "attr" in expert_predictions:
@@ -96,3 +98,32 @@ def test_sample_next_state_when_always_on_law_no_effect():
 
     state = State(attr=0)
     mixture.sample_next_state(state, "action")
+
+
+def test_evaluate_log_probability_when_always_on_law_no_effect():
+    """
+    When there is a law that is always on but has no effect,
+    we should still be able to evaluate the log probability of a transition.
+    This used to be broken and the test exists to ensure it doesn't break again.
+    """
+
+    mixture = LawMixture(
+        observable_extractor=ObservableExtractor(),
+        weighted_laws=[
+            WeightedLaw(
+                law=LawFunctionWrapper.from_non_runtime_created(AlwaysOnHasEffectLaw()),
+                weight=1.0,
+                is_fitted=True,
+            ),
+            WeightedLaw(
+                law=LawFunctionWrapper.from_non_runtime_created(AlwaysOnNoEffectLaw()),
+                weight=1.0,
+                is_fitted=True,
+            ),
+        ],
+    )
+
+    state = State(attr=0)
+    log_prob = mixture.evaluate_log_probability(state, "action", State(attr=1))
+    # Log probability should be close to 0
+    assert np.isclose(log_prob, 0.0, rtol=0, atol=1e-3)
