@@ -419,23 +419,6 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             case _:
                 assert_never(reduction)
 
-    def _log_distractor_instrumentation(
-        self,
-        min_n_distractors: Any,
-        max_n_distractors: Any,
-        mean_n_distractors: Any,
-        std_n_distractors: Any,
-    ):
-        logger.info(
-            "Distractor Stats",
-            distractor_stats={
-                "min": min_n_distractors,
-                "max": max_n_distractors,
-                "mean": mean_n_distractors,
-                "std": std_n_distractors,
-            },
-        )
-
     def evaluate(
         self,
         world_model: EvaluatableWorldModel[SymbolicStateT, ActionT],
