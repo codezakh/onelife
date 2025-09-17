@@ -1,11 +1,45 @@
 """
 Core interfaces and classes for the hybrid evaluation framework.
 
-This module defines the core protocols and data structures that enable
-environment-agnostic evaluation of symbolic world models.
+This module defines protocols, data structures, and the `Evaluator` that provide
+environment-agnostic evaluation of symbolic world models. The statistical
+aggregation implemented here is intentional and optimized for a specific
+question: how good and how stable is a world model across a set of scenarios
+that each represent a distinct game mechanic?
+
+Guiding principles for aggregation (do not "correct" without understanding):
+
+- Scenarios are the fundamental unit of evaluation. Each scenario (transition
+  source) targets a distinct mechanic; in aggregate reporting, each scenario is
+  weighted equally regardless of how many transitions it contains. A long
+  scenario must not dominate a short one.
+- We explicitly distinguish two types of variation:
+  - Inter-Scenario Variation: performance differences between mechanics.
+  - Intra-Scenario Variation: trial-to-trial variation on the same mechanic due
+    to stochasticity or sampling. Our reported standard deviation focuses on
+    this.
+- Primary goal: measure Intra-Scenario Variation (stability). When comparing two
+  models, average performance is insufficient; a slightly lower mean with a much
+  lower standard deviation may be preferable.
+
+Interpreting results:
+
+- To compare two models on a specific mechanic, use the per-scenario entries in
+  `metrics_by_source` (`"mean"` and `"std"`).
+- To compare overall performance, use the top-level mean in `EvaluationResults`.
+- To compare overall stability/consistency, use the top-level standard deviation
+  in `EvaluationResults`. This number represents the average trial-to-trial
+  variability on a typical mechanic.
+
+Alternatives intentionally rejected:
+
+- A single standard deviation computed over all transitions from all trials
+  would overweight scenarios with more transitions (violates equal weighting).
+- The standard deviation of scenario means measures Inter-Scenario Variation
+  (differences between mechanics). That is interesting but not our target; we
+  want the average Intra-Scenario Variation (stability) instead.
 """
 
-from collections import defaultdict
 from dataclasses import dataclass
 from typing import Generic, Protocol, TypeVar
 import numpy as np
@@ -16,7 +50,7 @@ from typing_extensions import Self
 from typing import TypeAlias, Mapping, Sequence
 from typing_extensions import assert_never
 import itertools
-from typing import Iterable, Literal, Any
+from typing import Iterable, Literal
 
 SymbolicStateT = TypeVar("SymbolicStateT")
 SymbolicStateT_contra = TypeVar("SymbolicStateT_contra", contravariant=True)
@@ -340,7 +374,23 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         all_transitions: Sequence[SymbolicTransition[SymbolicStateT, ActionT]],
         num_trials: int,
     ) -> dict[Literal["mean", "std"], EvaluationMetrics]:
+        """Evaluate a single scenario (transition source) over multiple trials.
 
+        This method measures a model's performance on one mechanic by:
+        1) Running ``num_trials`` independent evaluations on the same set of
+           transitions for this scenario.
+        2) Computing the mean performance across all transitions within the
+           scenario for each trial (scenario-level mean per trial).
+        3) Returning a mapping with two aggregated metrics across trials:
+           - ``"mean"``: the mean of the per-trial scenario means (typical
+             performance on this mechanic).
+           - ``"std"``: the standard deviation of the per-trial scenario means
+             (Intra-Scenario Variation; trial-to-trial stability for this
+             mechanic).
+
+        The per-trial means ensure each scenario is summarized by a single
+        number per trial, so scenarios with many transitions do not dominate.
+        """
         metrics_accumulator: list[list[EvaluationMetrics]] = []
         for _ in range(num_trials):
             metrics_for_trial: list[EvaluationMetrics] = []
@@ -423,7 +473,22 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         self,
         world_model: EvaluatableWorldModel[SymbolicStateT, ActionT],
     ) -> EvaluationResults:
+        """Evaluate a model across all scenarios and aggregate per the design.
 
+        Aggregation strategy:
+        - Final mean: the mean of the per-scenario mean performances (equal
+          weighting across scenarios/mechanics regardless of number of
+          transitions).
+        - Final standard deviation: the mean of the per-scenario standard
+          deviations, where each scenario's std is computed across trial means.
+          This is the average Intra-Scenario Variation, i.e., the model's
+          typical trial-to-trial variability on a mechanic.
+
+        Use ``metrics_by_source`` to compare models on a specific scenario using
+        that scenario's ``"mean"`` and ``"std"``. Use the top-level mean for
+        overall performance comparisons, and the top-level std for overall
+        stability/consistency comparisons across mechanics.
+        """
         all_transitions = list(
             itertools.chain.from_iterable(self.ctx.test_transitions.values())
         )
@@ -442,6 +507,9 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             reduction="mean",
         )
 
+        # The final std dev is the mean of the per-scenario standard deviations.
+        # This represents the average trial-to-trial performance variability of
+        # the model on a typical game mechanic.
         std_metrics = self._aggregate_metrics(
             iterable=[_["std"] for _ in metrics_by_source.values()],
             reduction="mean",
