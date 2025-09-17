@@ -113,9 +113,11 @@ class CrafterEvaluationFactory:
         ]
         scenario_results = run_scenarios(scenarios)
 
-        test_transitions: list[SymbolicTransition[WorldState, CrafterAction]] = []
+        test_transitions: dict[
+            str, list[SymbolicTransition[WorldState, CrafterAction]]
+        ] = dict()
         for result in scenario_results:
-            test_transitions.extend(result.transitions)
+            test_transitions[result.scenario.name] = result.transitions
 
         logger.info(f"Collected {len(test_transitions)} test transitions")
 

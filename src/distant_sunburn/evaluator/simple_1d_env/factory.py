@@ -44,7 +44,7 @@ class OneDEvaluationFactory:
 
         return EvaluationContext(
             config=config,
-            test_transitions=test_transitions,
+            test_transitions={"random": test_transitions},
             distractor_generator=Semantic1DDistractorGenerator(self.world_config),
             edit_distance_calculator=JSONPatchEditDistance(),
         )
