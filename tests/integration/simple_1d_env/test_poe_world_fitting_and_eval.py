@@ -96,7 +96,7 @@ def test():
         fitter = MaxLikelihoodWeightFitter(
             observable_extractor=ObservableExtractor(),
             learning_rate=0.1,
-            max_iterations=25,
+            max_iterations=3,
             batch_size=200,
             l1_weight=0.001,
         )
@@ -139,3 +139,6 @@ def test():
             learned_wm_perf.discriminative_accuracy
             < true_wm_perf.discriminative_accuracy
         )
+
+        assert learned_wm_perf.normalized_recall > null_wm_perf.normalized_recall
+        assert learned_wm_perf.normalized_recall < true_wm_perf.normalized_recall
