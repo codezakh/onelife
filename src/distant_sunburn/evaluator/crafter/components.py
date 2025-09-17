@@ -140,7 +140,7 @@ class CrafterDistractorGenerator:
     def __call__(
         self,
         transition: SymbolicTransition[WorldState, CrafterAction],
-        all_transitions: list[SymbolicTransition[WorldState, CrafterAction]],
+        all_transitions: Sequence[SymbolicTransition[WorldState, CrafterAction]],
         num_distractors: int,
     ) -> list[WorldState]:
         """

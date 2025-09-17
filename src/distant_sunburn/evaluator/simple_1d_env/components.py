@@ -7,7 +7,7 @@ protocols for different environments and use cases.
 
 import copy
 import random
-from typing import TypeVar
+from typing import TypeVar, Sequence
 from distant_sunburn.typing_utils import implements
 
 import jsonpatch
@@ -141,7 +141,7 @@ class Semantic1DDistractorGenerator:
     def __call__(
         self,
         transition: SymbolicTransition[GameState, Action],
-        all_transitions: list[SymbolicTransition[GameState, Action]],
+        all_transitions: Sequence[SymbolicTransition[GameState, Action]],
         num_distractors: int,
     ) -> list[GameState]:
         """Generate distractors using semantic mutations."""

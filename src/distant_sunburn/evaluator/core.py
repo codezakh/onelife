@@ -137,13 +137,13 @@ class EditDistanceCalculator(Protocol[SymbolicStateT_contra]):
         ...
 
 
-class DistractorGenerator(Protocol[SymbolicStateT, ActionT]):
+class DistractorGenerator(Protocol[SymbolicStateT, ActionT_contra]):
     """Protocol for generating plausible but incorrect next states."""
 
     def __call__(
         self,
-        transition: "SymbolicTransition[SymbolicStateT, ActionT]",
-        all_transitions: list["SymbolicTransition[SymbolicStateT, ActionT]"],
+        transition: "SymbolicTransition[SymbolicStateT, ActionT_contra]",
+        all_transitions: Sequence["SymbolicTransition[SymbolicStateT, ActionT_contra]"],
         num_distractors: int,
     ) -> list[SymbolicStateT]:
         """Generate plausible but incorrect next states"""
@@ -187,8 +187,11 @@ class EvaluationResults:
     """Results from a evaluation run."""
 
     edit_distance: EditDistance
+    edit_distance_std: EditDistance
     discriminative_accuracy: float
+    discriminative_accuracy_std: float
     normalized_recall: float
+    normalized_recall_std: float
     total_transitions_evaluated: int
     metrics_by_source: Mapping[
         TransitionSource, Mapping[Literal["mean", "std"], EvaluationMetrics]
@@ -207,7 +210,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         self,
         world_model: EvaluatableWorldModel[SymbolicStateT, ActionT],
         transition: SymbolicTransition[SymbolicStateT, ActionT],
-        all_transitions: list[SymbolicTransition[SymbolicStateT, ActionT]],
+        all_transitions: Sequence[SymbolicTransition[SymbolicStateT, ActionT]],
     ) -> EvaluationMetrics:
 
         # TODO: This function does a _bunch_ of deepcopies. This is because
@@ -330,6 +333,44 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             n_distractors=n_distractors,
         )
 
+    def _evaluate_transition_source(
+        self,
+        world_model: EvaluatableWorldModel[SymbolicStateT, ActionT],
+        transitions_for_source: Sequence[SymbolicTransition[SymbolicStateT, ActionT]],
+        all_transitions: Sequence[SymbolicTransition[SymbolicStateT, ActionT]],
+        num_trials: int,
+    ) -> dict[Literal["mean", "std"], EvaluationMetrics]:
+
+        metrics_accumulator: list[list[EvaluationMetrics]] = []
+        for _ in range(num_trials):
+            metrics_for_trial: list[EvaluationMetrics] = []
+            for transition in transitions_for_source:
+                evaluation_metrics = self._evaluate_transition(
+                    world_model, transition, all_transitions
+                )
+                metrics_for_trial.append(evaluation_metrics)
+            metrics_accumulator.append(metrics_for_trial)
+
+        # Calculate the _mean_ performance in each trial
+        aggregated_means_per_trial: list[EvaluationMetrics] = []
+        for metrics_for_trial in metrics_accumulator:
+            aggregated_means_per_trial.append(
+                self._aggregate_metrics(metrics_for_trial, reduction="mean")
+            )
+
+        # Now we compute the _standard deviation_ of the mean
+        # across trials
+        std_across_trials = self._aggregate_metrics(
+            aggregated_means_per_trial, reduction="std"
+        )
+
+        return {
+            "mean": self._aggregate_metrics(
+                aggregated_means_per_trial, reduction="mean"
+            ),
+            "std": std_across_trials,
+        }
+
     def _aggregate_metrics(
         self,
         iterable: Iterable[EvaluationMetrics],
@@ -400,77 +441,36 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         world_model: EvaluatableWorldModel[SymbolicStateT, ActionT],
     ) -> EvaluationResults:
 
-        edit_distances: list[EditDistance] = []
-
-        unaggregated_metrics_by_source: dict[
-            TransitionSource, list[EvaluationMetrics]
-        ] = defaultdict(list)
-
         all_transitions = list(
             itertools.chain.from_iterable(self.ctx.test_transitions.values())
         )
 
-        for transition_source, transitions in self.ctx.test_transitions.items():
-            # We handle multiple trials by concatenating the transitions
-            # num_trial times, so we get num_trials * len(transitions) transitions
-            # effectively running each transition source num_trials times
+        metrics_by_source: dict[
+            TransitionSource, dict[Literal["mean", "std"], EvaluationMetrics]
+        ] = {}
 
-            transitions_iterator = itertools.chain.from_iterable(
-                itertools.repeat(transitions, self.ctx.config.num_trials)
+        for transition_source, transitions in self.ctx.test_transitions.items():
+            metrics_by_source[transition_source] = self._evaluate_transition_source(
+                world_model, transitions, all_transitions, self.ctx.config.num_trials
             )
 
-            for transition in transitions_iterator:
-                evaluation_metrics = self._evaluate_transition(
-                    world_model, transition, all_transitions
-                )
-                edit_distances.append(evaluation_metrics.edit_distance)
-                unaggregated_metrics_by_source[transition_source].append(
-                    evaluation_metrics
-                )
-
         mean_metrics = self._aggregate_metrics(
-            itertools.chain.from_iterable(unaggregated_metrics_by_source.values()),
+            iterable=[_["mean"] for _ in metrics_by_source.values()],
             reduction="mean",
         )
 
         std_metrics = self._aggregate_metrics(
-            itertools.chain.from_iterable(unaggregated_metrics_by_source.values()),
+            iterable=[_["mean"] for _ in metrics_by_source.values()],
             reduction="std",
         )
 
-        min_metrics = self._aggregate_metrics(
-            itertools.chain.from_iterable(unaggregated_metrics_by_source.values()),
-            reduction="min",
-        )
-
-        max_metrics = self._aggregate_metrics(
-            itertools.chain.from_iterable(unaggregated_metrics_by_source.values()),
-            reduction="max",
-        )
-
-        self._log_distractor_instrumentation(
-            min_metrics.n_distractors,
-            max_metrics.n_distractors,
-            mean_metrics.n_distractors,
-            std_metrics.n_distractors,
-        )
-
-        aggregated_metrics_by_source: dict[
-            TransitionSource, dict[Literal["mean", "std"], EvaluationMetrics]
-        ] = {
-            transition_source: {
-                reduction: self._aggregate_metrics(
-                    metrics_for_transition_source, reduction=reduction
-                )
-                for reduction in ("mean", "std")
-            }
-            for transition_source, metrics_for_transition_source in unaggregated_metrics_by_source.items()
-        }
-
         return EvaluationResults(
             edit_distance=mean_metrics.edit_distance,
+            edit_distance_std=std_metrics.edit_distance,
             discriminative_accuracy=mean_metrics.discriminative_accuracy,
+            discriminative_accuracy_std=std_metrics.discriminative_accuracy,
             normalized_recall=mean_metrics.normalized_recall,
+            normalized_recall_std=std_metrics.normalized_recall,
             total_transitions_evaluated=len(all_transitions),
-            metrics_by_source=aggregated_metrics_by_source,
+            metrics_by_source=metrics_by_source,
         )
