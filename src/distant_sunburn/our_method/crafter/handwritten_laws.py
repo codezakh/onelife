@@ -4,6 +4,7 @@ from crafter.constants import ActionT as CrafterAction
 from loguru import logger
 from ...poe_world.core import DiscreteDistribution
 import numpy as np
+from crafter.state_export import Inventory
 
 
 class CorrectPlayerMovementLaw:
@@ -242,6 +243,54 @@ class CorrectEntityAILaw:
                 current_state.player.health = DiscreteDistribution(support=[new_health])  # type: ignore
 
 
+class UniversalInertialPriorLaw:
+    def precondition(self, current_state: WorldState, action: CrafterAction) -> bool:
+        return True
+
+    def effect(self, current_state: WorldState, action: CrafterAction) -> None:
+        """
+        Wrap targeted observable primitives with DiscreteDistribution placing
+        all mass on their current value (inertial prior: "nothing changes").
+
+        Targets:
+        - Player: position.x, position.y, health
+        - Each non-player object: position.x, position.y, health
+        - Player inventory: all integer inventory fields
+
+        Leaves existing DiscreteDistribution values unchanged.
+        """
+
+        def _wrap_int_like(value):
+            if isinstance(value, DiscreteDistribution):
+                return value
+            # Treat numpy integer types as ints
+            if isinstance(value, (int, np.integer)):
+                return DiscreteDistribution(support=[int(value)])
+            return value
+
+        # Player core observables
+        player = current_state.player
+        player.position.x = _wrap_int_like(player.position.x)  # type: ignore
+        player.position.y = _wrap_int_like(player.position.y)  # type: ignore
+        player.health = _wrap_int_like(player.health)  # type: ignore
+
+        # Non-player entities observables
+        for entity in current_state.objects:
+            if entity.entity_id == player.entity_id:
+                continue
+            entity.position.x = _wrap_int_like(entity.position.x)  # type: ignore
+            entity.position.y = _wrap_int_like(entity.position.y)  # type: ignore
+            entity.health = _wrap_int_like(entity.health)  # type: ignore
+
+        # Player inventory observables
+        inv = player.inventory
+        # Iterate over Inventory model fields to avoid missing any
+        for field_name in Inventory.model_fields.keys():
+            current_val = getattr(inv, field_name)
+            wrapped_val = _wrap_int_like(current_val)
+            setattr(inv, field_name, wrapped_val)
+
+
 class IncorrectPlayerMovementLawTeleports:
     def precondition(self, current_state: WorldState, action: CrafterAction) -> bool:
         return action in {"move_left", "move_right", "move_up", "move_down"}
@@ -366,4 +415,8 @@ INCORRECT_EXPERTS = [
     ),
 ]
 
-ALL_EXPERTS = CORRECT_EXPERTS + INCORRECT_EXPERTS
+PRIOR_EXPERTS = [
+    # LawFunctionWrapper.from_non_runtime_created(UniversalInertialPriorLaw()),
+]
+
+ALL_EXPERTS = CORRECT_EXPERTS + INCORRECT_EXPERTS + PRIOR_EXPERTS
