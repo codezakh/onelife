@@ -217,12 +217,12 @@ def test():
     for scenario_name, metrics in learned_wm_perf.metrics_by_source.items():
         table.add_row(
             scenario_name,
-            f"{metrics.edit_distance.raw:.3f}",
-            f"{metrics.edit_distance.normalized:.3f}",
-            f"{metrics.edit_distance.intersection_over_union:.3f}",
-            f"{metrics.discriminative_accuracy:.3f}",
-            f"{metrics.normalized_recall:.3f}",
-            f"{metrics.n_distractors:.0f}",
+            f"{metrics['mean'].edit_distance.raw:.3f} ({metrics['std'].edit_distance.raw:.3f})",
+            f"{metrics['mean'].edit_distance.normalized:.3f} ({metrics['std'].edit_distance.normalized:.3f})",
+            f"{metrics['mean'].edit_distance.intersection_over_union:.3f} ({metrics['std'].edit_distance.intersection_over_union:.3f})",
+            f"{metrics['mean'].discriminative_accuracy:.3f} ({metrics['std'].discriminative_accuracy:.3f})",
+            f"{metrics['mean'].normalized_recall:.3f} ({metrics['std'].normalized_recall:.3f})",
+            f"{metrics['mean'].n_distractors:.0f} ({metrics['std'].n_distractors:.0f})",
         )
 
     console.print(table)

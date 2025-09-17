@@ -190,7 +190,9 @@ class EvaluationResults:
     discriminative_accuracy: float
     normalized_recall: float
     total_transitions_evaluated: int
-    metrics_by_source: Mapping[TransitionSource, EvaluationMetrics]
+    metrics_by_source: Mapping[
+        TransitionSource, Mapping[Literal["mean", "std"], EvaluationMetrics]
+    ]
 
 
 class Evaluator(Generic[SymbolicStateT, ActionT]):
@@ -453,9 +455,16 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             std_metrics.n_distractors,
         )
 
-        aggregated_metrics_by_source = {
-            transition_source: self._aggregate_metrics(metrics, reduction="mean")
-            for transition_source, metrics in unaggregated_metrics_by_source.items()
+        aggregated_metrics_by_source: dict[
+            TransitionSource, dict[Literal["mean", "std"], EvaluationMetrics]
+        ] = {
+            transition_source: {
+                reduction: self._aggregate_metrics(
+                    metrics_for_transition_source, reduction=reduction
+                )
+                for reduction in ("mean", "std")
+            }
+            for transition_source, metrics_for_transition_source in unaggregated_metrics_by_source.items()
         }
 
         return EvaluationResults(
