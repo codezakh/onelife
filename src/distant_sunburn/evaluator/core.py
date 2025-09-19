@@ -155,6 +155,7 @@ class EvaluationMetrics:
     edit_distance: EditDistance
     discriminative_accuracy: float
     normalized_recall: float
+    reciprocal_rank: float
     n_distractors: float
 
 
@@ -226,6 +227,8 @@ class EvaluationResults:
     discriminative_accuracy_std: float
     normalized_recall: float
     normalized_recall_std: float
+    reciprocal_rank: float
+    reciprocal_rank_std: float
     total_transitions_evaluated: int
     metrics_by_source: Mapping[
         TransitionSource, Mapping[Literal["mean", "std"], EvaluationMetrics]
@@ -349,6 +352,8 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                 normalized_recall = 1.0 - (best_rank - 1) / (max_rank - 1)
             else:
                 normalized_recall = 1.0
+            # Reciprocal rank (higher is better). Use best rank among equivalents.
+            reciprocal_rank = 1.0 / float(best_rank)
         else:
             # This should be impossible because the true next state is explicitly
             # included in the candidates list. If it happens, it indicates a serious
@@ -364,6 +369,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             edit_distance=edit_distance,
             discriminative_accuracy=discriminative_accuracy,
             normalized_recall=normalized_recall,
+            reciprocal_rank=reciprocal_rank,
             n_distractors=n_distractors,
         )
 
@@ -429,12 +435,14 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         edit_distances: list[EditDistance] = []
         discriminative_accuracies: list[float] = []
         normalized_recalls: list[float] = []
+        reciprocal_ranks: list[float] = []
         n_distractors: list[float] = []
 
         for metrics in iterable:
             edit_distances.append(metrics.edit_distance)
             discriminative_accuracies.append(metrics.discriminative_accuracy)
             normalized_recalls.append(metrics.normalized_recall)
+            reciprocal_ranks.append(metrics.reciprocal_rank)
             n_distractors.append(metrics.n_distractors)
 
         match reduction:
@@ -443,6 +451,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     EditDistance.mean(edit_distances),
                     float(np.mean(discriminative_accuracies)),
                     float(np.mean(normalized_recalls)),
+                    float(np.mean(reciprocal_ranks)),
                     float(np.mean(n_distractors)),
                 )
             case "std":
@@ -450,6 +459,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     EditDistance.std(edit_distances),
                     float(np.std(discriminative_accuracies)),
                     float(np.std(normalized_recalls)),
+                    float(np.std(reciprocal_ranks)),
                     float(np.std(n_distractors)),
                 )
             case "min":
@@ -457,6 +467,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     EditDistance.min(edit_distances),
                     float(np.min(discriminative_accuracies)),
                     float(np.min(normalized_recalls)),
+                    float(np.min(reciprocal_ranks)),
                     int(np.min(n_distractors)),
                 )
             case "max":
@@ -464,6 +475,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     EditDistance.max(edit_distances),
                     float(np.max(discriminative_accuracies)),
                     float(np.max(normalized_recalls)),
+                    float(np.max(reciprocal_ranks)),
                     int(np.max(n_distractors)),
                 )
             case _:
@@ -522,6 +534,8 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             discriminative_accuracy_std=std_metrics.discriminative_accuracy,
             normalized_recall=mean_metrics.normalized_recall,
             normalized_recall_std=std_metrics.normalized_recall,
+            reciprocal_rank=mean_metrics.reciprocal_rank,
+            reciprocal_rank_std=std_metrics.reciprocal_rank,
             total_transitions_evaluated=len(all_transitions),
             metrics_by_source=metrics_by_source,
         )

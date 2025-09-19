@@ -151,6 +151,7 @@ def test():
     metrics_table.add_column("Edit Distance (IoU)", justify="right", style="magenta")
     metrics_table.add_column("Discriminative Accuracy", justify="right", style="green")
     metrics_table.add_column("Normalized Recall", justify="right", style="blue")
+    metrics_table.add_column("Reciprocal Rank", justify="right", style="blue")
 
     # Add rows for each model with styling: gray out true model and bold best non-true
     models = [
@@ -182,6 +183,7 @@ def test():
             f"{performance.edit_distance.intersection_over_union:.3f} ({performance.edit_distance_std.intersection_over_union:.3f})",
             f"{performance.discriminative_accuracy:.3f} ({performance.discriminative_accuracy_std:.3f})",
             f"{performance.normalized_recall:.3f} ({performance.normalized_recall_std:.3f})",
+            f"{performance.reciprocal_rank:.3f} ({performance.reciprocal_rank_std:.3f})",
         )
 
     console.print(metrics_table)
@@ -218,6 +220,7 @@ def test():
     table.add_column("Edit Distance (IoU)", justify="right", style="magenta")
     table.add_column("Discriminative Accuracy", justify="right", style="green")
     table.add_column("Normalized Recall", justify="right", style="blue")
+    table.add_column("Reciprocal Rank", justify="right", style="blue")
     table.add_column("N Distractors", justify="right", style="yellow")
 
     # Percentile-based colorization for scenario rows; require non-empty metrics
@@ -233,6 +236,7 @@ def test():
     )
     mean_acc = np.array([m["mean"].discriminative_accuracy for m in by_source.values()])
     mean_recall = np.array([m["mean"].normalized_recall for m in by_source.values()])
+    mean_rr = np.array([m["mean"].reciprocal_rank for m in by_source.values()])
 
     def thresholds(arr: np.ndarray) -> tuple[float, float]:
         return (float(np.nanpercentile(arr, 33)), float(np.nanpercentile(arr, 66)))
@@ -242,6 +246,7 @@ def test():
     iou_t = thresholds(mean_iou)
     acc_t = thresholds(mean_acc)
     recall_t = thresholds(mean_recall)
+    rr_t = thresholds(mean_rr)
 
     def color_for(value: float, t: tuple[float, float], higher_is_better: bool) -> str:
         low, high = t
@@ -286,6 +291,10 @@ def test():
             Text(
                 f"{mean.normalized_recall:.3f} ({std.normalized_recall:.3f})",
                 style=color_for(mean.normalized_recall, recall_t, True),
+            ),
+            Text(
+                f"{mean.reciprocal_rank:.3f} ({std.reciprocal_rank:.3f})",
+                style=color_for(mean.reciprocal_rank, rr_t, True),
             ),
             Text(
                 f"{mean.n_distractors:.0f} ({std.n_distractors:.0f})",
