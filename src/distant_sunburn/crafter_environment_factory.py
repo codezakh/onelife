@@ -203,14 +203,10 @@ class TextRenderer:
             [
                 "- {}: {}".format(i, num)
                 for i, num in info["inventory"].items()
-                if i not in self.vitals and num != 0
+                if i not in self.vitals
             ]
         )
-        inventory_str = (
-            "Your inventory:\n{}".format(inventory_str)
-            if inventory_str
-            else "You have nothing in your inventory."
-        )
+        inventory_str = "Your inventory:\n{}".format(inventory_str)
         result += inventory_str
 
         return result.strip()
