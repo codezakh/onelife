@@ -72,8 +72,4 @@ def test_evaluator_symbolic_metadata(tmp_path: Path):
 
     trajectory_steps = list(reader)
 
-    import ipdb
-
-    ipdb.set_trace()
-
     assert len(trajectory_steps) == 16
