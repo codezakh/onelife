@@ -18,8 +18,8 @@ from .balrog_interfaces import (
     Text,
 )
 from .typing_utils import implements
-from typing import Optional
-from typing import Protocol, Callable
+from typing import Optional, Any
+from typing import Protocol
 from crafter.state_export import Position
 
 MAP_SLUG_TO_ENGINE_ACTION = {
@@ -58,236 +58,300 @@ class TextRendererProtocol(Protocol):
     def __call__(self, world_state: WorldState) -> TextRendererOutput: ...
 
 
-def _manhattan(dx: int, dy: int) -> int:
-    return abs(dx) + abs(dy)
-
-
-def _direction_words(dx: int, dy: int) -> str:
-    parts: list[str] = []
-    if dy < 0:
-        parts.append(f"{abs(dy)} north")
-    elif dy > 0:
-        parts.append(f"{abs(dy)} south")
-    if dx < 0:
-        parts.append(f"{abs(dx)} west")
-    elif dx > 0:
-        parts.append(f"{abs(dx)} east")
-    if not parts:
-        return "here"
-    return ", ".join(parts)
-
-
-def _facing_to_word(facing: Position) -> str:
-    if facing.x < 0 and facing.y == 0:
-        return "west"
-    if facing.x > 0 and facing.y == 0:
-        return "east"
-    if facing.x == 0 and facing.y < 0:
-        return "north"
-    if facing.x == 0 and facing.y > 0:
-        return "south"
-    return "unknown"
-
-
 class UnsupervisedTextRenderer:
     """
-    WorldState-based text renderer for the unsupervised Crafter environment.
+    Text renderer for unsupervised Crafter environment that reads from WorldState.
 
-    - Uses only exported WorldState (no engine internals)
-    - Short-term context: inventory + local view summary
-    - Long-term context: status, facing/targeting, nearest-outside summary
+    Shows:
+    - Player status (sleeping/dead)
+    - Local view: closest material/entity of each type within view range
+    - Distant view: closest material/entity of each type outside view range
+    - Inventory
+    - What the player is targeting
     """
 
-    def __init__(
-        self,
-        *,
-        interesting_materials: Optional[set[str]] = None,
-        interesting_entities: Optional[set[str]] = None,
-        report_k_nearest_outside: int = 1,
-        include_zero_inventory: bool = True,
-    ) -> None:
-        if interesting_materials is None:
-            interesting_materials = {
-                "water",
-                "tree",
-                "stone",
-                "coal",
-                "iron",
-                "diamond",
-                "table",
-                "furnace",
-            }
-        if interesting_entities is None:
-            interesting_entities = {
-                "cow",
-                "zombie",
-                "skeleton",
-                "plant",
-                "fence",
-                "arrow",
-            }
-        self.interesting_materials = interesting_materials
-        self.interesting_entities = interesting_entities
-        self.report_k_nearest_outside = report_k_nearest_outside
-        self.include_zero_inventory = include_zero_inventory
+    # Interesting materials to show to the agent
+    INTERESTING_MATERIALS = [
+        "tree",
+        "stone",
+        "coal",
+        "iron",
+        "diamond",
+        "water",
+        "grass",
+        "table",
+        "furnace",
+        "plant",
+    ]
 
-    def __call__(self, world_state: WorldState) -> TextRendererOutput:
-        player = world_state.player
-        px, py = player.position.x, player.position.y
+    # Entity types to show to the agent
+    ENTITY_TYPES = ["cow", "zombie", "skeleton", "arrow", "fence"]
 
-        # Inventory summary (include zeros if configured)
-        inv_items = player.inventory.model_dump()
-        if self.include_zero_inventory:
-            inv_lines = [f"- {k}: {v}" for k, v in inv_items.items()]
-        else:
-            inv_lines = [f"- {k}: {v}" for k, v in inv_items.items() if v != 0]
-        inventory_section = "Your inventory:\n" + (
-            "\n".join(inv_lines) if inv_lines else "(empty)"
-        )
+    # Vital stats to show in inventory
+    VITALS = ["health", "food", "drink", "energy"]
 
-        # Local view radius from update_range (Manhattan distance)
-        update_range = world_state.update_range
+    def __init__(self):
+        pass
 
-        # Collect interesting materials within local view
-        local_material_obs: list[str] = []
-        size_x, size_y = world_state.size
-        materials = world_state.materials
-        for x in range(size_x):
-            for y in range(size_y):
-                mat = materials[x][y]
-                if mat is None:
+    def _manhattan_distance(self, pos1: Position, pos2: Position) -> int:
+        """Calculate Manhattan distance between two positions."""
+        return abs(pos1.x - pos2.x) + abs(pos1.y - pos2.y)
+
+    def _get_direction_description(self, from_pos: Position, to_pos: Position) -> str:
+        """Get relative direction description from one position to another."""
+        dx = to_pos.x - from_pos.x
+        dy = to_pos.y - from_pos.y
+
+        directions = []
+        if dy < 0:
+            directions.append("north")
+        elif dy > 0:
+            directions.append("south")
+        if dx < 0:
+            directions.append("west")
+        elif dx > 0:
+            directions.append("east")
+
+        return "-".join(directions) if directions else "here"
+
+    def _find_closest_material(
+        self, world_state: WorldState, material_name: str, within_range: bool = True
+    ) -> tuple[Position, int] | None:
+        """Find the closest material of the given type.
+
+        Args:
+            world_state: The world state to search
+            material_name: Name of material to find
+            within_range: If True, search within view range; if False, search outside view range
+
+        Returns:
+            Tuple of (position, distance) or None if not found
+        """
+        player_pos = world_state.player.position
+        view_range = max(world_state.view)
+
+        closest_pos = None
+        closest_distance = float("inf")
+
+        for x in range(world_state.size[0]):
+            for y in range(world_state.size[1]):
+                try:
+                    material = world_state.materials[x][y]
+                    if material == material_name:
+                        pos = Position(x=x, y=y)
+                        distance = self._manhattan_distance(player_pos, pos)
+
+                        # Check if this position is within/outside the desired range
+                        is_within = distance <= view_range
+                        if is_within == within_range and distance < closest_distance:
+                            closest_pos = pos
+                            closest_distance = distance
+                except IndexError:
                     continue
-                if mat not in self.interesting_materials:
-                    continue
-                dx, dy = x - px, y - py
-                if _manhattan(dx, dy) <= update_range:
-                    rel = _direction_words(dx, dy)
-                    local_material_obs.append(f"- {mat} at {rel} (x={x}, y={y})")
 
-        # Collect entities within local view (exclude player)
-        local_entity_obs: list[str] = []
+        return (closest_pos, int(closest_distance)) if closest_pos is not None else None
+
+    def _find_closest_entity(
+        self, world_state: WorldState, entity_type: str, within_range: bool = True
+    ) -> tuple[Position, int] | None:
+        """Find the closest entity of the given type.
+
+        Args:
+            world_state: The world state to search
+            entity_type: Name of entity type to find
+            within_range: If True, search within view range; if False, search outside view range
+
+        Returns:
+            Tuple of (position, distance) or None if not found
+        """
+        player_pos = world_state.player.position
+        view_range = max(world_state.view)
+
+        closest_pos = None
+        closest_distance = float("inf")
+
         for obj in world_state.objects:
-            if obj is world_state.player:
-                continue
-            name = obj.name
-            if name not in self.interesting_entities:
-                # still show entities, but we prioritize interesting
-                pass
-            ox, oy = obj.position.x, obj.position.y
-            dx, dy = ox - px, oy - py
-            if _manhattan(dx, dy) <= update_range:
-                rel = _direction_words(dx, dy)
-                local_entity_obs.append(f"- {name} at {rel} (x={ox}, y={oy})")
+            if obj.name == entity_type:
+                distance = self._manhattan_distance(player_pos, obj.position)
 
-        local_view_lines: list[str] = ["Local view (within update range):"]
-        if local_material_obs:
-            local_view_lines.append("Materials:")
-            local_view_lines.extend(local_material_obs)
-        if local_entity_obs:
-            local_view_lines.append("Entities:")
-            local_view_lines.extend(local_entity_obs)
-        if len(local_view_lines) == 1:
-            local_view_lines.append("(nothing notable in local view)")
-        local_view_section = "\n".join(local_view_lines)
+                # Check if this position is within/outside the desired range
+                is_within = distance <= view_range
+                if is_within == within_range and distance < closest_distance:
+                    closest_pos = obj.position
+                    closest_distance = distance
 
-        # Facing/targeting
-        facing_word = _facing_to_word(player.facing)
-        target_material, target_obj = world_state.get_target_tile()
-        if target_obj is not None:
-            targeting_desc = f"you are targeting a {target_obj.name}"
-            # also include material under the targeted tile, if any
-            if target_material is not None:
-                targeting_desc += f" on {target_material}"
+        return (closest_pos, int(closest_distance)) if closest_pos is not None else None
+
+    def _describe_player_status(self, world_state: WorldState) -> str:
+        """Describe the player's current status."""
+        if world_state.player.sleeping:
+            return "You are sleeping and cannot take actions until energy is full.\n\n"
+        elif world_state.player.health <= 0:
+            return "You are dead.\n\n"
         else:
-            patch = target_material if target_material is not None else "nothing"
-            if patch == "nothing":
-                targeting_desc = "you are targeting nothing"
+            return ""
+
+    def _describe_target(self, world_state: WorldState) -> str:
+        """Describe what the player is currently targeting."""
+        target_pos = world_state.player.position + world_state.player.facing
+        material, obj = world_state.get_tile(target_pos)
+
+        if obj is not None:
+            return f"You are targeting a {obj.name} at ({target_pos.x}, {target_pos.y}).\n\n"
+        elif material is not None:
+            return (
+                f"You are targeting {material} at ({target_pos.x}, {target_pos.y}).\n\n"
+            )
+        else:
+            return f"You are targeting empty space at ({target_pos.x}, {target_pos.y}).\n\n"
+
+    def _describe_local_view(self, world_state: WorldState) -> str:
+        """Describe the local view - closest materials and entities within view range."""
+        result = "Local view (within {} steps):\n".format(max(world_state.view))
+
+        # Find closest materials within range
+        material_descriptions = []
+        for material in self.INTERESTING_MATERIALS:
+            closest = self._find_closest_material(
+                world_state, material, within_range=True
+            )
+            if closest is not None:
+                pos, distance = closest
+                direction = self._get_direction_description(
+                    world_state.player.position, pos
+                )
+                material_descriptions.append(
+                    f"- {material}: {distance} steps {direction} at ({pos.x}, {pos.y})"
+                )
             else:
-                targeting_desc = f"you are targeting a patch of {patch}"
-        # facing_section is integrated into long_term below
+                material_descriptions.append(f"- {material}: not present")
 
-        # Status
-        status_bits: list[str] = []
-        if player.sleeping:
-            status_bits.append("sleeping")
-        if player.health <= 0:
-            status_bits.append("dead")
-        status_section = "Status: " + (", ".join(status_bits) if status_bits else "ok")
+        # Find closest entities within range
+        entity_descriptions = []
+        for entity_type in self.ENTITY_TYPES:
+            closest = self._find_closest_entity(
+                world_state, entity_type, within_range=True
+            )
+            if closest is not None:
+                pos, distance = closest
+                direction = self._get_direction_description(
+                    world_state.player.position, pos
+                )
+                entity_descriptions.append(
+                    f"- {entity_type}: {distance} steps {direction} at ({pos.x}, {pos.y})"
+                )
+            else:
+                entity_descriptions.append(f"- {entity_type}: not present")
 
-        # Outside-local-view nearest-of-each-kind
-        outside_lines: list[str] = ["Interesting things outside view (nearest first):"]
+        if material_descriptions:
+            result += "Materials:\n" + "\n".join(material_descriptions) + "\n\n"
+        if entity_descriptions:
+            result += "Entities:\n" + "\n".join(entity_descriptions) + "\n\n"
 
-        def collect_positions_for_material(kind: str) -> list[tuple[int, int, int]]:
-            results: list[tuple[int, int, int]] = []
-            for x in range(size_x):
-                for y in range(size_y):
-                    mat = materials[x][y]
-                    if mat != kind:
-                        continue
-                    dx, dy = x - px, y - py
-                    if _manhattan(dx, dy) > update_range:
-                        results.append((_manhattan(dx, dy), x, y))
-            results.sort(key=lambda t: (t[0], t[1], t[2]))
-            return results
+        return result
 
-        def collect_positions_for_entity(kind: str) -> list[tuple[int, int, int]]:
-            results: list[tuple[int, int, int]] = []
-            for obj in world_state.objects:
-                if obj is world_state.player:
-                    continue
-                if obj.name != kind:
-                    continue
-                x, y = obj.position.x, obj.position.y
-                dx, dy = x - px, y - py
-                if _manhattan(dx, dy) > update_range:
-                    results.append((_manhattan(dx, dy), x, y))
-            results.sort(key=lambda t: (t[0], t[1], t[2]))
-            return results
+    def _describe_distant_view(self, world_state: WorldState) -> str:
+        """Describe the distant view - closest materials and entities outside view range."""
+        result = "Distant view (beyond {} steps):\n".format(max(world_state.view))
 
-        interesting_material_kinds = [
-            "tree",
+        # Find closest materials outside range
+        material_descriptions = []
+        for material in self.INTERESTING_MATERIALS:
+            closest = self._find_closest_material(
+                world_state, material, within_range=False
+            )
+            if closest is not None:
+                pos, distance = closest
+                direction = self._get_direction_description(
+                    world_state.player.position, pos
+                )
+                material_descriptions.append(
+                    f"- {material}: {distance} steps {direction} at ({pos.x}, {pos.y})"
+                )
+            else:
+                material_descriptions.append(f"- {material}: not present in world")
+
+        # Find closest entities outside range
+        entity_descriptions = []
+        for entity_type in self.ENTITY_TYPES:
+            closest = self._find_closest_entity(
+                world_state, entity_type, within_range=False
+            )
+            if closest is not None:
+                pos, distance = closest
+                direction = self._get_direction_description(
+                    world_state.player.position, pos
+                )
+                entity_descriptions.append(
+                    f"- {entity_type}: {distance} steps {direction} at ({pos.x}, {pos.y})"
+                )
+            else:
+                entity_descriptions.append(f"- {entity_type}: not present in world")
+
+        if material_descriptions:
+            result += "Materials:\n" + "\n".join(material_descriptions) + "\n\n"
+        if entity_descriptions:
+            result += "Entities:\n" + "\n".join(entity_descriptions) + "\n\n"
+
+        return result
+
+    def _describe_inventory(self, world_state: WorldState) -> str:
+        """Describe the player's inventory."""
+        result = "Your status:\n"
+
+        # Show vitals
+        for vital in self.VITALS:
+            value = getattr(world_state.player.inventory, vital, 0)
+            result += f"- {vital}: {value}/9\n"
+
+        result += "\nYour inventory:\n"
+
+        # Show other items
+        inventory_items = []
+        for item_name in [
+            "sapling",
+            "wood",
             "stone",
             "coal",
             "iron",
             "diamond",
-            "table",
-            "furnace",
-        ]
-        interesting_entity_kinds = [
-            "cow",
-            "zombie",
-            "skeleton",
-            "plant",
-            "fence",
-            "arrow",
-        ]
+            "wood_pickaxe",
+            "stone_pickaxe",
+            "iron_pickaxe",
+            "wood_sword",
+            "stone_sword",
+            "iron_sword",
+        ]:
+            value = getattr(world_state.player.inventory, item_name, 0)
+            if value > 0:
+                inventory_items.append(f"- {item_name}: {value}")
 
-        for kind in interesting_material_kinds:
-            positions = collect_positions_for_material(kind)
-            if not positions:
-                outside_lines.append(f"- {kind}: not present")
-                continue
-            topk = positions[: self.report_k_nearest_outside]
-            joined = "; ".join(f"{dist} steps at (x={x}, y={y})" for dist, x, y in topk)
-            outside_lines.append(f"- {kind}: {joined}")
+        if inventory_items:
+            result += "\n".join(inventory_items)
+        else:
+            result += "You have no items in your inventory."
 
-        for kind in interesting_entity_kinds:
-            positions = collect_positions_for_entity(kind)
-            if not positions:
-                outside_lines.append(f"- {kind}: not present")
-                continue
-            topk = positions[: self.report_k_nearest_outside]
-            joined = "; ".join(f"{dist} steps at (x={x}, y={y})" for dist, x, y in topk)
-            outside_lines.append(f"- {kind}: {joined}")
+        return result
 
-        outside_section = "\n".join(outside_lines)
+    def __call__(self, world_state: WorldState) -> TextRendererOutput:
+        """Render the world state as text for the language model."""
+        result = ""
 
-        long_term = "\n\n".join(
-            [status_section, f"facing: {facing_word}", targeting_desc, outside_section]
-        )
-        short_term = "\n\n".join([inventory_section, local_view_section])
+        # Player status
+        result += self._describe_player_status(world_state)
+
+        # What player is targeting
+        result += self._describe_target(world_state)
+
+        # Local view
+        result += self._describe_local_view(world_state)
+
+        # Distant view
+        result += self._describe_distant_view(world_state)
+
         return TextRendererOutput(
-            long_term_context=long_term.strip(), short_term_context=short_term.strip()
+            long_term_context=result.strip(),
+            short_term_context=self._describe_inventory(world_state),
         )
 
 
@@ -295,9 +359,7 @@ class UnsupervisedCrafterEnvironmentConfig(EnvironmentConfig):
     area: tuple[int, int]
     view: tuple[int, int]
     size: tuple[int, int]
-    text_renderer: Callable[[WorldState], TextRendererOutput] = Field(
-        default_factory=lambda: UnsupervisedTextRenderer()
-    )
+    text_renderer: Any
     instruction_prompt: str
     reward: bool
     seed: Optional[int] = None
