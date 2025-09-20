@@ -86,107 +86,59 @@ from distant_sunburn.poe_world.core import DiscreteDistribution
 # ============================================================================
 
 
-class SimpleZombieMovementLaw:
-    """
-    Simple law that predicts zombie movement towards the player.
-
-    This law predicts that if there's a zombie entity, it will move towards the player
-    by either moving left (towards player) or up (towards player) with equal probability.
-    """
-
+class ZombieMovementLaw:
     def precondition(self, current_state: WorldState, action: CrafterAction) -> bool:
-        # This law applies to all actions
         return True
 
     def effect(self, current_state: WorldState, action: CrafterAction) -> None:
-        """
-        Predict zombie movement towards the player.
-
-        Args:
-            current_state: The current game state to modify in-place
-            action: The action being taken
-        """
-        # Find the zombie entity
-        zombie = None
-        for entity in current_state.objects:
-            if entity.name == "zombie":
-                zombie = entity
-                break
-
-        if zombie is None:
-            return  # No zombie found
-
-        # Get player position
         player_x = current_state.player.position.x
         player_y = current_state.player.position.y
 
-        # Get zombie position
-        zombie_x = zombie.position.x
-        zombie_y = zombie.position.y
+        for entity in current_state.objects:
+            if entity.name == "zombie":
+                continue
 
-        # Calculate direction towards player
-        dx = player_x - zombie_x  # Positive means player is to the right
-        dy = player_y - zombie_y  # Positive means player is below
+            zombie_x = entity.position.x
+            zombie_y = entity.position.y
 
-        # Predict movement: either move left towards player or up towards player
-        # with equal probability (50% each)
+            dx = player_x - zombie_x
+            dy = player_y - zombie_y
 
-        # Option 1: Move left towards player (if player is to the right)
-        if dx > 0:  # Player is to the right
-            new_x_left = min(current_state.size[0] - 1, zombie_x + 1)
-            new_y_left = zombie_y
-        else:  # Player is to the left or same column
-            new_x_left = max(0, zombie_x - 1)
-            new_y_left = zombie_y
+            if dx > 0:
+                new_x_left = min(current_state.size[0] - 1, zombie_x + 1)
+                new_y_left = zombie_y
+            else:
+                new_x_left = max(0, zombie_x - 1)
+                new_y_left = zombie_y
+            if dy > 0:
+                new_x_up = zombie_x
+                new_y_up = min(current_state.size[1] - 1, zombie_y + 1)
+            else:
+                new_x_up = zombie_x
+                new_y_up = max(0, zombie_y - 1)
 
-        # Option 2: Move up towards player (if player is below)
-        if dy > 0:  # Player is below
-            new_x_up = zombie_x
-            new_y_up = min(current_state.size[1] - 1, zombie_y + 1)
-        else:  # Player is above or same row
-            new_x_up = zombie_x
-            new_y_up = max(0, zombie_y - 1)
-
-        # Create discrete distributions with equal probability for both options
-        zombie.position.x = DiscreteDistribution(
-            support=[
-                new_x_left,
-                new_x_up,
-            ],  # pyright: ignore[reportAttributeAccessIssue]
-        )
-        zombie.position.y = DiscreteDistribution(
-            support=[
-                new_y_left,
-                new_y_up,
-            ],  # pyright: ignore[reportAttributeAccessIssue]
-        )
+            entity.position.x = DiscreteDistribution(
+                support=[
+                    new_x_left,
+                    new_x_up,
+                ],  # pyright: ignore[reportAttributeAccessIssue]
+            )
+            entity.position.y = DiscreteDistribution(
+                support=[
+                    new_y_left,
+                    new_y_up,
+                ],  # pyright: ignore[reportAttributeAccessIssue]
+            )
 
 
-class SimplePlayerMovementLaw:
-    """
-    Simple law that predicts player movement.
-
-    This law predicts that when the player takes a movement action,
-    they will move in the direction of the action with certainty.
-    """
-
+class PlayerMovementLaw:
     def precondition(self, current_state: WorldState, action: CrafterAction) -> bool:
-        # This law applies to movement actions
         return action in {"move_left", "move_right", "move_up", "move_down"}
 
     def effect(self, current_state: WorldState, action: CrafterAction) -> None:
-        """
-        Predict player movement based on the action.
-
-        Args:
-            current_state: The current game state to modify in-place
-            action: The action being taken
-        """
-        # Get current player position
         current_x = current_state.player.position.x
         current_y = current_state.player.position.y
 
-        # Calculate new position based on action
         new_x = current_x
         new_y = current_y
 
@@ -199,7 +151,6 @@ class SimplePlayerMovementLaw:
         elif action == "move_down":
             new_y = min(current_state.size[1] - 1, current_y + 1)
 
-        # Assign sharply peaked distributions (certainty)
         current_state.player.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
         current_state.player.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
 
@@ -1250,10 +1201,10 @@ class ZombieMovementAnalyzer:
     def __init__(self):
         # Use both player movement and zombie movement laws
         self.player_law = LawFunctionWrapper.from_non_runtime_created(
-            SimplePlayerMovementLaw()
+            PlayerMovementLaw()
         )
         self.zombie_law = LawFunctionWrapper.from_non_runtime_created(
-            SimpleZombieMovementLaw()
+            ZombieMovementLaw()
         )
 
     def sample_environment_transitions(
@@ -1365,12 +1316,15 @@ class ZombieMovementAnalyzer:
 
         return player_predictions, zombie_predictions
 
-    def create_test_visualization(self, initial_state: WorldState) -> None:
+    def create_test_visualization(
+        self, initial_state: WorldState, show_labels: bool = True
+    ) -> None:
         """
         Create a test visualization with hand-specified distributions to test the rendering code.
 
         Args:
             initial_state: Starting state with zombie placed near player
+            show_labels: Whether to show numerical labels on the heat map squares
         """
         print("Creating test visualization with hand-specified distributions...")
 
@@ -1414,6 +1368,7 @@ class ZombieMovementAnalyzer:
             (9, 9),
             (256, 256),
             (player_pos.x, player_pos.y),
+            show_labels=show_labels,
         )
 
         # Create visualizations
@@ -1445,7 +1400,11 @@ class ZombieMovementAnalyzer:
         print("Test visualization complete! Check 'zombie_movement_test.png'")
 
     def create_environment_sampling_visualization(
-        self, initial_state: WorldState, action: str = "move_right", n_samples: int = 50
+        self,
+        initial_state: WorldState,
+        action: str = "move_right",
+        n_samples: int = 50,
+        show_labels: bool = True,
     ) -> None:
         """
         Create a visualization showing environment sampling results.
@@ -1454,6 +1413,7 @@ class ZombieMovementAnalyzer:
             initial_state: Starting state with zombie placed near player
             action: Action to take
             n_samples: Number of samples to take from environment
+            show_labels: Whether to show numerical labels on the heat map squares
         """
         print(
             f"Creating environment sampling visualization with {n_samples} samples..."
@@ -1526,6 +1486,7 @@ class ZombieMovementAnalyzer:
             (256, 256),
             (player_pos.x, player_pos.y),
             alpha=0.7,
+            show_labels=show_labels,
         )
 
         # Create visualization
@@ -1552,7 +1513,11 @@ class ZombieMovementAnalyzer:
         )
 
     def create_custom_rendering_visualization(
-        self, initial_state: WorldState, action: str = "move_right", n_samples: int = 50
+        self,
+        initial_state: WorldState,
+        action: str = "move_right",
+        n_samples: int = 50,
+        show_labels: bool = True,
     ) -> None:
         """
         Create a visualization using custom rendering with distributions under sprites.
@@ -1561,6 +1526,7 @@ class ZombieMovementAnalyzer:
             initial_state: Starting state with zombie placed near player
             action: Action to take
             n_samples: Number of samples to take from environment
+            show_labels: Whether to show numerical labels on the heat map squares
         """
         print(f"Creating custom rendering visualization with {n_samples} samples...")
 
@@ -1591,6 +1557,7 @@ class ZombieMovementAnalyzer:
             render_size=(256, 256),
             alpha=0.8,  # Higher alpha since we have white background
             white_background_for_distributions=True,
+            show_labels=show_labels,
         )
 
         # Also render the base image for comparison
@@ -1618,7 +1585,11 @@ class ZombieMovementAnalyzer:
         )
 
     def create_law_vs_environment_comparison(
-        self, initial_state: WorldState, action: str = "move_right", n_samples: int = 50
+        self,
+        initial_state: WorldState,
+        action: str = "move_right",
+        n_samples: int = 50,
+        show_labels: bool = True,
     ) -> None:
         """
         Create a side-by-side comparison of law predictions vs environment sampling.
@@ -1627,6 +1598,7 @@ class ZombieMovementAnalyzer:
             initial_state: Starting state with zombie placed near player
             action: Action to take
             n_samples: Number of samples to take from environment
+            show_labels: Whether to show numerical labels on the heat map squares
         """
         print(f"Creating law vs environment comparison with {n_samples} samples...")
 
@@ -1683,6 +1655,7 @@ class ZombieMovementAnalyzer:
             render_size=(256, 256),
             alpha=0.8,
             white_background_for_distributions=False,  # Turn off white backgrounds
+            show_labels=show_labels,
         )
 
         # Render law predictions (both player and zombie)
@@ -1694,6 +1667,7 @@ class ZombieMovementAnalyzer:
             render_size=(256, 256),
             alpha=0.8,
             white_background_for_distributions=False,  # Turn off white backgrounds
+            show_labels=show_labels,
         )
 
         # Also render the base image for reference
@@ -1756,9 +1730,10 @@ def main():
         state_with_zombie, "move_left", n_samples=30
     )
 
-    # Create law vs environment comparison
+    # Create law vs environment comparison without labels
+    print("\nCreating law vs environment comparison without labels...")
     analyzer.create_law_vs_environment_comparison(
-        state_with_zombie, "move_left", n_samples=30
+        state_with_zombie, "move_left", n_samples=30, show_labels=False
     )
 
 
