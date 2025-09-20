@@ -255,6 +255,224 @@ def world_to_pixel_coordinates(
 
 
 # ============================================================================
+# CUSTOM RENDERING FUNCTIONS
+# ============================================================================
+
+
+def render_with_distribution_overlay(
+    world_state: WorldState,
+    distributions: dict[tuple[int, int], float],
+    view_dims: tuple[int, int] = (9, 9),
+    render_size: tuple[int, int] = (256, 256),
+    alpha: float = 0.6,
+) -> np.ndarray:
+    """
+    Render the game world with probability distribution overlay between ground and sprites.
+
+    This function replicates the LocalView rendering pipeline but adds our distribution
+    overlay between the ground tiles and the sprites, so the distributions appear
+    underneath the sprites but above the ground.
+
+    Args:
+        world_state: The world state to render
+        distributions: Dict mapping (x, y) world positions to probability values
+        view_dims: View dimensions of the game
+        render_size: Render size of the image
+        alpha: Transparency of the distribution overlay
+
+    Returns:
+        Rendered image with distribution overlay
+    """
+    from crafter import engine, objects, constants
+    from crafter.state_reconstruction import reconstruct_world_from_state
+
+    # Reconstruct the world from state
+    world = reconstruct_world_from_state(world_state)
+
+    # Find the player
+    player = None
+    for obj in world.objects:
+        if isinstance(obj, objects.Player):
+            player = obj
+            break
+
+    if player is None:
+        raise ValueError("No player found in world state")
+
+    # Set up rendering parameters
+    size = np.array(render_size)
+    unit = size // np.array(view_dims)
+    canvas = np.zeros(tuple(size) + (3,), np.uint8) + 127
+
+    # Create textures
+    textures = engine.Textures(constants.root / "assets")
+
+    # STEP 1: Draw ground tiles/materials (same as LocalView)
+    offset = np.array(view_dims) // 2
+    center = np.array(player.pos)
+
+    for x in range(view_dims[0]):
+        for y in range(view_dims[1]):
+            pos = center + np.array([x, y]) - offset
+            if not _inside_world_bounds(pos, world.area):
+                continue
+            material, _ = world[pos]
+            texture = textures.get(material, unit)
+            _draw_texture(canvas, np.array([x, y]) * unit, texture)
+
+    # STEP 2: Draw probability distribution overlay
+    # Use the same coordinate system as the ground tiles for consistency
+    for (world_x, world_y), prob in distributions.items():
+        # Convert world coordinates to view coordinates using the same logic as ground tiles
+        world_pos = np.array([world_x, world_y])
+        view_pos = world_pos - center + offset
+
+        # Check if position is within view bounds
+        if not _inside_view_bounds(view_pos, view_dims):
+            continue
+
+        # Convert to pixel coordinates
+        pixel_pos = view_pos * unit
+
+        # Create colored square based on probability
+        color = _prob_to_color(prob)
+
+        # Draw distribution square
+        for dx in range(unit[0]):
+            for dy in range(unit[1]):
+                px, py = int(pixel_pos[0] + dx), int(pixel_pos[1] + dy)
+                if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
+                    # Blend with existing pixel (ground)
+                    canvas[py, px] = (
+                        alpha * np.array(color) + (1 - alpha) * canvas[py, px]
+                    )
+
+    # STEP 3: Draw sprites/objects (same as LocalView)
+    for obj in world.objects:
+        pos = obj.pos - center + offset
+        if not _inside_view_bounds(pos, view_dims):
+            continue
+        texture = textures.get(obj.texture, unit)
+        _draw_alpha_texture(canvas, pos * unit, texture)
+
+    # Apply lighting and other effects (same as LocalView)
+    canvas = _apply_lighting(canvas, world.daylight)
+    if player.sleeping:
+        canvas = _apply_sleep_effect(canvas)
+
+    # Handle the transpose that the original rendering does
+    return canvas.transpose((1, 0, 2))
+
+
+def _inside_world_bounds(pos: np.ndarray, area: tuple[int, int]) -> bool:
+    """Check if position is within world bounds."""
+    return 0 <= pos[0] < area[0] and 0 <= pos[1] < area[1]
+
+
+def _inside_view_bounds(pos: np.ndarray, view_dims: tuple[int, int]) -> bool:
+    """Check if position is within view bounds."""
+    return 0 <= pos[0] < view_dims[0] and 0 <= pos[1] < view_dims[1]
+
+
+def _draw_texture(canvas: np.ndarray, pos: np.ndarray, texture: np.ndarray) -> None:
+    """Draw a texture at the given position."""
+    if texture is None:
+        return
+
+    pos = pos.astype(int)
+    size = np.array(texture.shape[:2])
+
+    # Calculate bounds
+    x1, y1 = pos
+    x2, y2 = pos + size
+
+    # Clamp to canvas bounds
+    x1 = max(0, x1)
+    y1 = max(0, y1)
+    x2 = min(canvas.shape[1], x2)
+    y2 = min(canvas.shape[0], y2)
+
+    if x1 < x2 and y1 < y2:
+        # Calculate texture bounds
+        tx1, ty1 = x1 - pos[0], y1 - pos[1]
+        tx2, ty2 = tx1 + (x2 - x1), ty1 + (y2 - y1)
+
+        canvas[y1:y2, x1:x2] = texture[ty1:ty2, tx1:tx2]
+
+
+def _draw_alpha_texture(
+    canvas: np.ndarray, pos: np.ndarray, texture: np.ndarray
+) -> None:
+    """Draw a texture with alpha blending at the given position."""
+    if texture is None:
+        return
+
+    pos = pos.astype(int)
+    size = np.array(texture.shape[:2])
+
+    # Calculate bounds
+    x1, y1 = pos
+    x2, y2 = pos + size
+
+    # Clamp to canvas bounds
+    x1 = max(0, x1)
+    y1 = max(0, y1)
+    x2 = min(canvas.shape[1], x2)
+    y2 = min(canvas.shape[0], y2)
+
+    if x1 < x2 and y1 < y2:
+        # Calculate texture bounds
+        tx1, ty1 = x1 - pos[0], y1 - pos[1]
+        tx2, ty2 = tx1 + (x2 - x1), ty1 + (y2 - y1)
+
+        # Alpha blend
+        texture_slice = texture[ty1:ty2, tx1:tx2]
+        canvas_slice = canvas[y1:y2, x1:x2]
+
+        if texture_slice.shape[2] == 4:  # Has alpha channel
+            alpha = texture_slice[:, :, 3:4] / 255.0
+            rgb = texture_slice[:, :, :3]
+            canvas[y1:y2, x1:x2] = (1 - alpha) * canvas_slice + alpha * rgb
+        else:  # No alpha channel, just copy
+            canvas[y1:y2, x1:x2] = texture_slice
+
+
+def _prob_to_color(prob: float) -> tuple[int, int, int]:
+    """Convert probability to RGB color (red for high, blue for low)."""
+    # Clamp probability to [0, 1]
+    prob = max(0.0, min(1.0, prob))
+
+    # Create color gradient from blue (low) to red (high)
+    if prob < 0.5:
+        # Blue to purple
+        intensity = prob * 2
+        return (int(127 * intensity), 0, int(255 * (1 - intensity)))
+    else:
+        # Purple to red
+        intensity = (prob - 0.5) * 2
+        return (int(127 + 128 * intensity), 0, int(127 * (1 - intensity)))
+
+
+def _apply_lighting(canvas: np.ndarray, daylight: float) -> np.ndarray:
+    """Apply lighting effects to the canvas."""
+    if daylight >= 0.5:
+        return canvas
+
+    # Apply night effect (simplified version)
+    night_factor = 1 - daylight
+    canvas = canvas * (1 - night_factor * 0.6)
+    return canvas.astype(np.uint8)
+
+
+def _apply_sleep_effect(canvas: np.ndarray) -> np.ndarray:
+    """Apply sleep effect to the canvas."""
+    # Convert to grayscale and tint blue
+    gray = np.mean(canvas, axis=2, keepdims=True)
+    blue_tint = np.array([0, 0, 16])
+    return (gray * 0.5 + blue_tint * 0.5).astype(np.uint8)
+
+
+# ============================================================================
 # MAIN CLASSES
 # ============================================================================
 
@@ -676,6 +894,71 @@ class ZombieMovementAnalyzer:
             "Environment sampling visualization complete! Check 'environment_sampling_visualization.png'"
         )
 
+    def create_custom_rendering_visualization(
+        self, initial_state: WorldState, action: str = "move_right", n_samples: int = 50
+    ) -> None:
+        """
+        Create a visualization using custom rendering with distributions under sprites.
+
+        Args:
+            initial_state: Starting state with zombie placed near player
+            action: Action to take
+            n_samples: Number of samples to take from environment
+        """
+        print(f"Creating custom rendering visualization with {n_samples} samples...")
+
+        # Sample from the environment
+        print("Sampling from environment...")
+        env_positions = self.sample_environment_transitions(
+            initial_state, action, n_samples
+        )
+
+        # Count position frequencies
+        position_counts = {}
+        for pos in env_positions:
+            position_counts[pos] = position_counts.get(pos, 0) + 1
+
+        # Convert counts to probabilities
+        env_distribution = {
+            pos: count / n_samples for pos, count in position_counts.items()
+        }
+
+        print(f"Environment sampling found {len(env_distribution)} unique positions")
+        print(f"Position distribution: {env_distribution}")
+
+        # Render using custom rendering function
+        custom_rendered = render_with_distribution_overlay(
+            initial_state,
+            env_distribution,
+            view_dims=(9, 9),
+            render_size=(256, 256),
+            alpha=0.7,
+        )
+
+        # Also render the base image for comparison
+        base_image = observation(initial_state, render_size=(256, 256))
+
+        # Create visualization
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+        # Base image (original rendering)
+        axes[0].imshow(base_image)
+        axes[0].set_title("Original Rendering (Overlay on Top)")
+        axes[0].axis("off")
+
+        # Custom rendering (distributions under sprites)
+        axes[1].imshow(custom_rendered)
+        axes[1].set_title("Custom Rendering (Distributions Under Sprites)")
+        axes[1].axis("off")
+
+        plt.tight_layout()
+        plt.savefig("custom_rendering_visualization.png", dpi=150, bbox_inches="tight")
+        plt.show()
+
+        print(
+            "Custom rendering visualization complete! Check 'custom_rendering_visualization.png'"
+        )
+
 
 def main():
     """Main function to run the zombie movement visualization."""
@@ -697,6 +980,11 @@ def main():
 
     # Create environment sampling visualization
     analyzer.create_environment_sampling_visualization(
+        state_with_zombie, "move_right", n_samples=30
+    )
+
+    # Create custom rendering visualization
+    analyzer.create_custom_rendering_visualization(
         state_with_zombie, "move_right", n_samples=30
     )
 
