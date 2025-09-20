@@ -59,6 +59,7 @@ import matplotlib.pyplot as plt
 import copy
 import pickle
 import base64
+from PIL import Image, ImageDraw, ImageFont
 
 # Import crafter components
 from crafter.functional_env import (
@@ -74,7 +75,6 @@ from crafter.testing_helpers import world_utils, player_utils
 
 # Import our method components
 from distant_sunburn.our_method.crafter.handwritten_laws import (
-    CorrectEntityAILaw,
     LawFunctionWrapper,
 )
 from crafter.constants import ActionT as CrafterAction
@@ -200,8 +200,8 @@ class SimplePlayerMovementLaw:
             new_y = min(current_state.size[1] - 1, current_y + 1)
 
         # Assign sharply peaked distributions (certainty)
-        current_state.player.position.x = DiscreteDistribution(support=[new_x])
-        current_state.player.position.y = DiscreteDistribution(support=[new_y])
+        current_state.player.position.x = DiscreteDistribution(support=[new_x])  # type: ignore
+        current_state.player.position.y = DiscreteDistribution(support=[new_y])  # type: ignore
 
 
 # ============================================================================
@@ -416,6 +416,304 @@ def world_to_view_coordinates_unified(
 
 
 # ============================================================================
+# HEAT MAP RENDERING SYSTEM
+# ============================================================================
+
+
+class HeatMapRenderer:
+    """
+    Clean, maintainable heat map rendering system with numerical labels.
+
+    This class abstracts away the complexity of rendering probability distributions
+    as colored squares with numerical labels on top of game renders.
+    """
+
+    def __init__(
+        self,
+        view_dims: tuple[int, int] = (9, 9),
+        render_size: tuple[int, int] = (256, 256),
+        gap_factor: float = 0.8,
+        show_labels: bool = True,
+        label_precision: int = 2,
+    ):
+        """
+        Initialize the heat map renderer.
+
+        Args:
+            view_dims: View dimensions (width, height)
+            render_size: Render size in pixels (width, height)
+            gap_factor: Factor to make squares smaller (0.8 = 80% of tile size)
+            show_labels: Whether to show numerical labels on squares
+            label_precision: Number of decimal places for labels
+        """
+        self.view_dims = view_dims
+        self.render_size = render_size
+        self.gap_factor = gap_factor
+        self.show_labels = show_labels
+        self.label_precision = label_precision
+
+        # Calculate unit size for each grid cell
+        self.unit_size = np.array(render_size) // np.array(view_dims)
+
+        # Try to load a font for labels, fall back to default if not available
+        try:
+            self.font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 10)
+        except (OSError, IOError):
+            try:
+                self.font = ImageFont.load_default()
+            except Exception:
+                self.font = None
+
+    def _get_square_bounds(
+        self, pixel_pos: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Calculate the bounds for a heat map square.
+
+        Args:
+            pixel_pos: Pixel position as numpy array [x, y]
+
+        Returns:
+            Tuple of (square_size, offset, bounds) where:
+            - square_size: (width, height) of the square
+            - offset: (x_offset, y_offset) to center the square
+            - bounds: (x1, y1, x2, y2) pixel bounds
+        """
+        # Calculate square size with gap
+        square_size = (self.unit_size * self.gap_factor).astype(int)
+
+        # Calculate offset to center the square
+        offset = ((self.unit_size - square_size) // 2).astype(int)
+
+        # Calculate bounds
+        x1, y1 = (pixel_pos + offset).astype(int)
+        x2, y2 = x1 + square_size[0], y1 + square_size[1]
+
+        return square_size, offset, np.array([x1, y1, x2, y2])
+
+    def _prob_to_color(self, prob: float) -> tuple[int, int, int]:
+        """
+        Convert probability to RGB color using a clear heat map scheme.
+
+        Args:
+            prob: Probability value between 0 and 1
+
+        Returns:
+            RGB color tuple (r, g, b)
+        """
+        # Clamp probability to [0, 1]
+        prob = max(0.0, min(1.0, prob))
+
+        # Use a clearer color scheme: blue (low) -> green -> yellow -> red (high)
+        if prob < 0.25:
+            # Blue to cyan
+            t = prob / 0.25
+            r = int(0)
+            g = int(128 * t)
+            b = int(255)
+        elif prob < 0.5:
+            # Cyan to green
+            t = (prob - 0.25) / 0.25
+            r = int(0)
+            g = int(128 + 127 * t)
+            b = int(255 - 255 * t)
+        elif prob < 0.75:
+            # Green to yellow
+            t = (prob - 0.5) / 0.25
+            r = int(255 * t)
+            g = int(255)
+            b = int(0)
+        else:
+            # Yellow to red
+            t = (prob - 0.75) / 0.25
+            r = int(255)
+            g = int(255 - 255 * t)
+            b = int(0)
+
+        return (r, g, b)
+
+    def _get_label_color(self, prob: float) -> tuple[int, int, int]:
+        """
+        Get appropriate text color for labels based on background probability.
+
+        Args:
+            prob: Probability value between 0 and 1
+
+        Returns:
+            RGB color tuple (r, g, b) for text
+        """
+        # Use white text for dark backgrounds (low probabilities)
+        # and black text for light backgrounds (high probabilities)
+        if prob < 0.5:
+            return (255, 255, 255)  # White text
+        else:
+            return (0, 0, 0)  # Black text
+
+    def _draw_heat_square(
+        self,
+        canvas: np.ndarray,
+        pixel_pos: np.ndarray,
+        prob: float,
+        alpha: float = 0.8,
+        white_background: bool = True,
+    ) -> None:
+        """
+        Draw a single heat map square with optional numerical label.
+
+        Args:
+            canvas: Canvas to draw on (modified in-place)
+            pixel_pos: Pixel position as numpy array [x, y]
+            prob: Probability value to display
+            alpha: Transparency factor
+            white_background: Whether to draw white background first
+        """
+        square_size, offset, bounds = self._get_square_bounds(pixel_pos)
+        x1, y1, x2, y2 = bounds
+
+        # Clamp bounds to canvas
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(canvas.shape[1], x2)
+        y2 = min(canvas.shape[0], y2)
+
+        if x1 >= x2 or y1 >= y2:
+            return  # Square is outside canvas
+
+        # Get color for this probability
+        color = self._prob_to_color(prob)
+
+        # Calculate effective alpha (higher prob = more opaque)
+        prob_alpha = alpha * (0.6 + 0.4 * prob)
+
+        # Draw the square
+        for px in range(x1, x2):
+            for py in range(y1, y2):
+                if white_background:
+                    # Draw white background first
+                    canvas[py, px] = [255, 255, 255]
+                    # Then blend with color
+                    canvas[py, px] = prob_alpha * np.array(color) + (
+                        1 - prob_alpha
+                    ) * np.array([255, 255, 255])
+                else:
+                    # Blend with existing pixel
+                    canvas[py, px] = (
+                        prob_alpha * np.array(color) + (1 - prob_alpha) * canvas[py, px]
+                    )
+
+    def _draw_label(
+        self,
+        canvas: np.ndarray,
+        pixel_pos: np.ndarray,
+        prob: float,
+    ) -> None:
+        """
+        Draw numerical label on a heat map square.
+
+        Args:
+            canvas: Canvas to draw on (modified in-place)
+            pixel_pos: Pixel position as numpy array [x, y]
+            prob: Probability value to display
+        """
+        if not self.show_labels or self.font is None:
+            return
+
+        # Convert canvas to PIL Image for text rendering
+        # Ensure the canvas is uint8 for PIL compatibility
+        canvas_uint8 = canvas.astype(np.uint8)
+        pil_image = Image.fromarray(canvas_uint8)
+        draw = ImageDraw.Draw(pil_image)
+
+        # Format the probability value
+        label_text = f"{prob:.{self.label_precision}f}"
+
+        # Get text color based on probability
+        text_color = self._get_label_color(prob)
+
+        # Calculate text position (center of the square)
+        square_size, offset, bounds = self._get_square_bounds(pixel_pos)
+        x1, y1, x2, y2 = bounds
+
+        # Get text size
+        bbox = draw.textbbox((0, 0), label_text, font=self.font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+
+        # Center the text
+        text_x = (x1 + x2 - text_width) // 2
+        text_y = (y1 + y2 - text_height) // 2
+
+        # Draw the text
+        draw.text((text_x, text_y), label_text, fill=text_color, font=self.font)
+
+        # Convert back to numpy array
+        canvas[:] = np.array(pil_image)
+
+    def render_distributions(
+        self,
+        canvas: np.ndarray,
+        distributions: dict[tuple[int, int], float],
+        player_pos: np.ndarray,
+        alpha: float = 0.8,
+        white_background: bool = True,
+        transpose_coordinates: bool = False,
+    ) -> None:
+        """
+        Render probability distributions as heat map squares with labels.
+
+        Args:
+            canvas: Canvas to draw on (modified in-place)
+            distributions: Dict mapping (x, y) world positions to probabilities
+            player_pos: Player's world position as numpy array [x, y]
+            alpha: Transparency factor
+            white_background: Whether to draw white backgrounds
+            transpose_coordinates: If True, swap x and y pixel coordinates to account
+                                   for a canvas transpose.
+        """
+        for (world_x, world_y), prob in distributions.items():
+            # Convert world coordinates to view coordinates
+            world_pos = np.array([world_x, world_y])
+            view_pos = world_to_view_coordinates_unified(
+                world_pos, player_pos, self.view_dims
+            )
+
+            if view_pos is None:
+                continue  # Position is outside view
+
+            # Convert to pixel coordinates
+            pixel_pos = view_pos * self.unit_size
+
+            # If the canvas is transposed, we need to swap the coordinates
+            if transpose_coordinates:
+                pixel_pos = np.array([pixel_pos[1], pixel_pos[0]])
+
+            # DEBUG: Print position information
+            print(
+                f"DEBUG DISTRIBUTION: World({world_x}, {world_y}) -> View{tuple(view_pos)} -> Pixel{tuple(pixel_pos)} (prob: {prob:.2f})"
+            )
+
+            # Draw the heat square (only if alpha > 0)
+            if alpha > 0:
+                square_size, offset, bounds = self._get_square_bounds(pixel_pos)
+                x1, y1, x2, y2 = bounds
+                print(
+                    f"DEBUG SQUARE: Drawing square at pixel bounds ({x1}, {y1}) to ({x2}, {y2}) for prob {prob:.2f}"
+                )
+                self._draw_heat_square(canvas, pixel_pos, prob, alpha, white_background)
+
+            # Draw the label
+            if self.show_labels and self.font is not None:
+                square_size, offset, bounds = self._get_square_bounds(pixel_pos)
+                x1, y1, x2, y2 = bounds
+                text_x = (x1 + x2 - 20) // 2  # Approximate text width
+                text_y = (y1 + y2 - 10) // 2  # Approximate text height
+                print(
+                    f"DEBUG LABEL: Drawing label '{prob:.2f}' at pixel ({text_x}, {text_y}) for square bounds ({x1}, {y1}) to ({x2}, {y2})"
+                )
+            self._draw_label(canvas, pixel_pos, prob)
+
+
+# ============================================================================
 # CUSTOM RENDERING FUNCTIONS
 # ============================================================================
 
@@ -427,6 +725,7 @@ def render_with_distribution_overlay(
     render_size: tuple[int, int] = (256, 256),
     alpha: float = 0.6,
     white_background_for_distributions: bool = True,
+    show_labels: bool = True,
 ) -> np.ndarray:
     """
     Render the game world with probability distribution overlay between ground and sprites.
@@ -443,6 +742,7 @@ def render_with_distribution_overlay(
         alpha: Transparency of the distribution overlay
         white_background_for_distributions: If True, draw distributions over white squares
                                            for better visibility
+        show_labels: Whether to show numerical labels on the heat map squares
 
     Returns:
         Rendered image with distribution overlay
@@ -483,74 +783,24 @@ def render_with_distribution_overlay(
 
             if not _inside_world_bounds(world_pos, world.area):
                 continue
-            material, _ = world[world_pos]
-            texture = textures.get(material, unit)
+            material, _ = world[world_pos]  # type: ignore
+            texture = textures.get(material, tuple(unit))  # type: ignore
             _draw_texture(canvas, view_pos * unit, texture)
 
-    # STEP 2: Draw probability distribution overlay
-    # Use unified coordinate mapping for consistency
-    for (world_x, world_y), prob in distributions.items():
-        # Convert world coordinates to view coordinates using unified function
-        world_pos = np.array([world_x, world_y])
-        view_pos = world_to_view_coordinates_unified(world_pos, center, view_dims)
-
-        if view_pos is None:
-            continue
-
-        # Convert to pixel coordinates
-        pixel_pos = view_pos * unit
-
-        # Create colored square based on probability
-        color = _prob_to_color(prob, "heatmap")
-
-        # Draw distribution square with gaps to show terrain
-        # Create gaps by making the square smaller (80% of unit size)
-        gap_factor = 0.8
-        square_size_x = int(unit[0] * gap_factor)
-        square_size_y = int(unit[1] * gap_factor)
-        offset_x = (int(unit[0]) - square_size_x) // 2
-        offset_y = (int(unit[1]) - square_size_y) // 2
-
-        if white_background_for_distributions:
-            # Draw white background first for better contrast
-            for dx in range(square_size_x):
-                for dy in range(square_size_y):
-                    px, py = int(pixel_pos[0] + offset_x + dx), int(
-                        pixel_pos[1] + offset_y + dy
-                    )
-                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
-                        canvas[py, px] = [255, 255, 255]  # White background
-
-            # Then draw the colored distribution on top
-            for dx in range(square_size_x):
-                for dy in range(square_size_y):
-                    px, py = int(pixel_pos[0] + offset_x + dx), int(
-                        pixel_pos[1] + offset_y + dy
-                    )
-                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
-                        # Use probability-based alpha for better visibility
-                        prob_alpha = alpha * (
-                            0.6 + 0.4 * prob
-                        )  # Higher prob = more opaque
-                        # Blend with white background
-                        canvas[py, px] = prob_alpha * np.array(color) + (
-                            1 - prob_alpha
-                        ) * np.array([255, 255, 255])
-        else:
-            # Original behavior: blend with ground tiles
-            prob_alpha = alpha * (0.6 + 0.4 * prob)  # Higher prob = more opaque
-
-            for dx in range(square_size_x):
-                for dy in range(square_size_y):
-                    px, py = int(pixel_pos[0] + offset_x + dx), int(
-                        pixel_pos[1] + offset_y + dy
-                    )
-                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
-                        # Blend with existing pixel (ground)
-                        canvas[py, px] = (
-                            prob_alpha * np.array(color)
-                            + (1 - prob_alpha) * canvas[py, px]
-                        )
+    # STEP 2: Draw probability distribution overlay using the new HeatMapRenderer
+    heatmap_renderer = HeatMapRenderer(
+        view_dims=view_dims,
+        render_size=render_size,
+        show_labels=False,  # Don't draw labels yet - we'll do it after transpose
+        label_precision=2,
+    )
+    heatmap_renderer.render_distributions(
+        canvas,
+        distributions,
+        center,
+        alpha=alpha,
+        white_background=white_background_for_distributions,
+    )
 
     # STEP 3: Draw sprites/objects (same as LocalView)
     for obj in world.objects:
@@ -558,7 +808,7 @@ def render_with_distribution_overlay(
         view_pos = world_to_view_coordinates_unified(obj.pos, center, view_dims)
         if view_pos is None:
             continue
-        texture = textures.get(obj.texture, unit)
+        texture = textures.get(obj.texture, tuple(unit))  # type: ignore
         _draw_alpha_texture(canvas, view_pos * unit, texture)
 
     # Apply lighting and other effects (same as LocalView)
@@ -567,7 +817,27 @@ def render_with_distribution_overlay(
         canvas = _apply_sleep_effect(canvas)
 
     # Handle the transpose that the original rendering does
-    return canvas.transpose((1, 0, 2))
+    canvas = canvas.transpose((1, 0, 2))
+
+    # STEP 4: Draw text labels AFTER transpose (if requested)
+    if show_labels:
+        heatmap_renderer_with_labels = HeatMapRenderer(
+            view_dims=view_dims,
+            render_size=render_size,
+            show_labels=True,
+            label_precision=2,
+        )
+        # Note: After transpose, try using the original center position
+        heatmap_renderer_with_labels.render_distributions(
+            canvas,
+            distributions,
+            center,  # Use original center
+            alpha=0.0,  # Don't draw squares again, just labels
+            white_background=False,
+            transpose_coordinates=True,  # Account for canvas transpose
+        )
+
+    return canvas
 
 
 def render_with_dual_distribution_overlay(
@@ -578,6 +848,7 @@ def render_with_dual_distribution_overlay(
     render_size: tuple[int, int] = (256, 256),
     alpha: float = 0.6,
     white_background_for_distributions: bool = True,
+    show_labels: bool = True,
 ) -> np.ndarray:
     """
     Render the game world with both player and zombie probability distributions.
@@ -590,6 +861,7 @@ def render_with_dual_distribution_overlay(
         render_size: Render size of the image
         alpha: Transparency of the distribution overlay
         white_background_for_distributions: If True, draw distributions over white squares
+        show_labels: Whether to show numerical labels on the heat map squares
 
     Returns:
         Rendered image with both distributions
@@ -620,6 +892,7 @@ def render_with_dual_distribution_overlay(
 
     # STEP 1: Draw ground tiles/materials (same as LocalView)
     center = np.array(player.pos)
+    print(f"DEBUG CENTER: Player center position: {center}, type: {type(center)}")
 
     for x in range(view_dims[0]):
         for y in range(view_dims[1]):
@@ -630,80 +903,33 @@ def render_with_dual_distribution_overlay(
 
             if not _inside_world_bounds(world_pos, world.area):
                 continue
-            material, _ = world[world_pos]
-            texture = textures.get(material, unit)
+            material, _ = world[world_pos]  # type: ignore
+            texture = textures.get(material, tuple(unit))  # type: ignore
             _draw_texture(canvas, view_pos * unit, texture)
 
-    # STEP 2: Draw probability distribution overlays
-    # Use unified coordinate mapping for consistency
-    all_positions = set(player_distributions.keys()) | set(zombie_distributions.keys())
+    # STEP 2: Draw probability distribution overlays using the new HeatMapRenderer
+    heatmap_renderer = HeatMapRenderer(
+        view_dims=view_dims,
+        render_size=render_size,
+        show_labels=False,  # Don't draw labels yet - we'll do it after transpose
+        label_precision=2,
+    )
 
-    for world_x, world_y in all_positions:
-        # Convert world coordinates to view coordinates using unified function
-        world_pos = np.array([world_x, world_y])
-        view_pos = world_to_view_coordinates_unified(world_pos, center, view_dims)
+    # Render all distributions using a single function
+    all_distributions = {}
+    if player_distributions:
+        all_distributions.update(player_distributions)
+    if zombie_distributions:
+        all_distributions.update(zombie_distributions)
 
-        if view_pos is None:
-            continue
-
-        # Convert to pixel coordinates
-        pixel_pos = view_pos * unit
-
-        # Draw distribution squares with gaps to show terrain
-        # Create gaps by making the squares smaller (80% of unit size)
-        gap_factor = 0.8
-        square_size_x = int(unit[0] * gap_factor)
-        square_size_y = int(unit[1] * gap_factor)
-        offset_x = (int(unit[0]) - square_size_x) // 2
-        offset_y = (int(unit[1]) - square_size_y) // 2
-
-        # Draw white background first if enabled
-        if white_background_for_distributions:
-            for dx in range(square_size_x):
-                for dy in range(square_size_y):
-                    px, py = int(pixel_pos[0] + offset_x + dx), int(
-                        pixel_pos[1] + offset_y + dy
-                    )
-                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
-                        canvas[py, px] = [255, 255, 255]  # White background
-
-        # Draw player distribution (heatmap)
-        if (world_x, world_y) in player_distributions:
-            prob = player_distributions[(world_x, world_y)]
-            color = _prob_to_color(prob, "heatmap")
-            # Use higher alpha for better visibility
-            prob_alpha = alpha * (0.6 + 0.4 * prob)
-
-            for dx in range(square_size_x):
-                for dy in range(square_size_y):
-                    px, py = int(pixel_pos[0] + offset_x + dx), int(
-                        pixel_pos[1] + offset_y + dy
-                    )
-                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
-                        # Blend with existing pixel
-                        canvas[py, px] = (
-                            prob_alpha * np.array(color)
-                            + (1 - prob_alpha) * canvas[py, px]
-                        )
-
-        # Draw zombie distribution (heatmap)
-        if (world_x, world_y) in zombie_distributions:
-            prob = zombie_distributions[(world_x, world_y)]
-            color = _prob_to_color(prob, "heatmap")
-            # Use higher alpha for better visibility
-            prob_alpha = alpha * (0.6 + 0.4 * prob)
-
-            for dx in range(square_size_x):
-                for dy in range(square_size_y):
-                    px, py = int(pixel_pos[0] + offset_x + dx), int(
-                        pixel_pos[1] + offset_y + dy
-                    )
-                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
-                        # Blend with existing pixel
-                        canvas[py, px] = (
-                            prob_alpha * np.array(color)
-                            + (1 - prob_alpha) * canvas[py, px]
-                        )
+    if all_distributions:
+        heatmap_renderer.render_distributions(
+            canvas,
+            all_distributions,
+            center,
+            alpha=alpha,
+            white_background=white_background_for_distributions,
+        )
 
     # STEP 3: Draw sprites/objects (same as LocalView)
     for obj in world.objects:
@@ -711,7 +937,16 @@ def render_with_dual_distribution_overlay(
         view_pos = world_to_view_coordinates_unified(obj.pos, center, view_dims)
         if view_pos is None:
             continue
-        texture = textures.get(obj.texture, unit)
+
+        # DEBUG: Print entity position information
+        print(
+            f"DEBUG ENTITY: {obj.__class__.__name__} at World{tuple(obj.pos)} -> View{tuple(view_pos)} -> Pixel{tuple(view_pos * unit)}"
+        )
+        print(
+            f"DEBUG ENTITY DETAILS: {obj.__class__.__name__} position type: {type(obj.pos)}, value: {obj.pos}"
+        )
+
+        texture = textures.get(obj.texture, tuple(unit))  # type: ignore
         _draw_alpha_texture(canvas, view_pos * unit, texture)
 
     # Apply lighting and other effects (same as LocalView)
@@ -720,7 +955,34 @@ def render_with_dual_distribution_overlay(
         canvas = _apply_sleep_effect(canvas)
 
     # Handle the transpose that the original rendering does
-    return canvas.transpose((1, 0, 2))
+    canvas = canvas.transpose((1, 0, 2))
+
+    # STEP 4: Draw text labels AFTER transpose (if requested)
+    if show_labels:
+        heatmap_renderer_with_labels = HeatMapRenderer(
+            view_dims=view_dims,
+            render_size=render_size,
+            show_labels=True,
+            label_precision=2,
+        )
+        # Note: After transpose, render labels for all distributions using a single function
+        all_distributions = {}
+        if player_distributions:
+            all_distributions.update(player_distributions)
+        if zombie_distributions:
+            all_distributions.update(zombie_distributions)
+
+        if all_distributions:
+            heatmap_renderer_with_labels.render_distributions(
+                canvas,
+                all_distributions,
+                center,  # Use original center
+                alpha=0.0,  # Don't draw squares again, just labels
+                white_background=False,
+                transpose_coordinates=True,  # Account for canvas transpose
+            )
+
+    return canvas
 
 
 def _inside_world_bounds(pos: np.ndarray, area: tuple[int, int]) -> bool:
@@ -929,9 +1191,10 @@ class DistributionVisualizer:
         render_size: tuple[int, int],
         player_pos: tuple[int, int],
         alpha: float = 0.6,
+        show_labels: bool = True,
     ) -> np.ndarray:
         """
-        Create an overlay showing probability distributions as colored squares.
+        Create an overlay showing probability distributions as colored squares with labels.
 
         Args:
             base_image: The base rendered game image
@@ -940,6 +1203,7 @@ class DistributionVisualizer:
             render_size: Render size of the image
             player_pos: Player's world position (x, y)
             alpha: Transparency of the overlay
+            show_labels: Whether to show numerical labels on the heat map squares
 
         Returns:
             Image with distribution overlay
@@ -947,53 +1211,25 @@ class DistributionVisualizer:
         # Create a copy of the base image
         overlay_image = base_image.copy().astype(np.float32)
 
-        view_width, view_height = view_dims
-        render_width, render_height = render_size
-        player_x, player_y = player_pos
+        # Use the new HeatMapRenderer for cleaner, more maintainable code
+        heatmap_renderer = HeatMapRenderer(
+            view_dims=view_dims,
+            render_size=render_size,
+            show_labels=show_labels,
+            label_precision=2,
+        )
 
-        # Create overlay for each distribution position
-        for (world_x, world_y), prob in distributions.items():
-            # Use helper function to convert world coordinates to pixel coordinates
-            pixel_coords = world_to_pixel_coordinates(
-                world_x,
-                world_y,
-                player_x,
-                player_y,
-                view_width,
-                view_height,
-                render_width,
-                render_height,
-            )
+        # Convert player position to numpy array
+        player_pos_array = np.array(player_pos)
 
-            if pixel_coords is not None:
-                pixel_x, pixel_y, square_width, square_height = pixel_coords
-
-                # Create colored square based on probability
-                color = _prob_to_color(prob, "heatmap")
-
-                # Use probability-based alpha for better visibility
-                prob_alpha = alpha * (0.6 + 0.4 * prob)  # Higher prob = more opaque
-
-                # Draw square with gaps to show terrain
-                # Create gaps by making the square smaller (80% of unit size)
-                gap_factor = 0.8
-                square_size_x = int(square_width * gap_factor)
-                square_size_y = int(square_height * gap_factor)
-                offset_x = (square_width - square_size_x) // 2
-                offset_y = (square_height - square_size_y) // 2
-
-                for dx in range(square_size_x):
-                    for dy in range(square_size_y):
-                        px, py = pixel_x + offset_x + dx, pixel_y + offset_y + dy
-                        if (
-                            0 <= px < overlay_image.shape[1]
-                            and 0 <= py < overlay_image.shape[0]
-                        ):
-                            # Blend with existing pixel
-                            overlay_image[py, px] = (
-                                prob_alpha * np.array(color)
-                                + (1 - prob_alpha) * overlay_image[py, px]
-                            )
+        # Render distributions using the new system
+        heatmap_renderer.render_distributions(
+            overlay_image,
+            distributions,
+            player_pos_array,
+            alpha=alpha,
+            white_background=False,  # Blend with existing image
+        )
 
         return overlay_image.astype(np.uint8)
 
@@ -1052,8 +1288,10 @@ class ZombieMovementAnalyzer:
             # This might be more effective for getting different outcomes
             state_with_advanced_rng = advance_random_state(initial_state, steps=i * 10)
 
-            # Take the transition
-            next_state, _ = transition(state_with_advanced_rng, action_idx)
+            # Take the transition - make sure we're using a deep copy
+            next_state, _ = transition(
+                copy.deepcopy(state_with_advanced_rng), action_idx
+            )
 
             # Find player position in the next state
             player_positions.append(
