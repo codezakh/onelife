@@ -644,10 +644,10 @@ def render_with_dual_distribution_overlay(
                     if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
                         canvas[py, px] = [255, 255, 255]  # White background
 
-        # Draw player distribution (blue)
+        # Draw player distribution (orange)
         if (world_x, world_y) in player_distributions:
             prob = player_distributions[(world_x, world_y)]
-            color = _prob_to_color(prob, "blue")
+            color = _prob_to_color(prob, "orange")
             prob_alpha = alpha * (0.3 + 0.7 * prob)
 
             for dx in range(unit[0]):
@@ -769,11 +769,11 @@ def _draw_alpha_texture(
 
 def _prob_to_color(prob: float, color_type: str = "orange") -> tuple[int, int, int]:
     """
-    Convert probability to RGB color using different color schemes.
+    Convert probability to RGB color using a consistent orange scheme.
 
     Args:
         prob: Probability value between 0 and 1
-        color_type: "orange" for zombie predictions, "blue" for player predictions
+        color_type: Unused (kept for compatibility), always uses orange
 
     Returns:
         RGB color tuple (r, g, b)
@@ -782,21 +782,10 @@ def _prob_to_color(prob: float, color_type: str = "orange") -> tuple[int, int, i
     prob = max(0.0, min(1.0, prob))
     intensity = 0.4 + 0.6 * prob  # Range from 0.4 to 1.0 for good visibility
 
-    if color_type == "orange":
-        # Orange for zombie predictions
-        r = int(255 * intensity)  # Red component
-        g = int(165 * intensity)  # Green component
-        b = int(0)  # No blue component for pure orange
-    elif color_type == "blue":
-        # Blue for player predictions
-        r = int(0)  # No red component
-        g = int(100 * intensity)  # Green component
-        b = int(255 * intensity)  # Blue component
-    else:
-        # Default to orange
-        r = int(255 * intensity)
-        g = int(165 * intensity)
-        b = int(0)
+    # Use orange for both player and zombie predictions
+    r = int(255 * intensity)  # Red component
+    g = int(165 * intensity)  # Green component
+    b = int(0)  # No blue component for pure orange
 
     return (r, g, b)
 
@@ -977,9 +966,9 @@ class ZombieMovementAnalyzer:
 
     def sample_environment_transitions(
         self, initial_state: WorldState, action: str, n_samples: int = 50
-    ) -> list[tuple[int, int]]:
+    ) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
         """
-        Sample multiple transitions from the environment to get true zombie positions.
+        Sample multiple transitions from the environment to get true player and zombie positions.
 
         Args:
             initial_state: Starting state
@@ -987,7 +976,7 @@ class ZombieMovementAnalyzer:
             n_samples: Number of samples to take
 
         Returns:
-            List of (x, y) positions where zombie ended up
+            Tuple of (player_positions, zombie_positions) where each is a list of (x, y) positions
         """
         # Convert action string to action index
         action_idx = None
@@ -998,7 +987,9 @@ class ZombieMovementAnalyzer:
 
         if action_idx is None:
             raise ValueError(f"Unknown action: {action}")
-        positions = []
+
+        player_positions = []
+        zombie_positions = []
 
         for i in range(n_samples):
             # Try advancing the random state instead of using different seeds
@@ -1008,13 +999,18 @@ class ZombieMovementAnalyzer:
             # Take the transition
             next_state, _ = transition(state_with_advanced_rng, action_idx)
 
+            # Find player position in the next state
+            player_positions.append(
+                (next_state.player.position.x, next_state.player.position.y)
+            )
+
             # Find zombie position in the next state
             for obj in next_state.objects:
                 if isinstance(obj, ZombieState):
-                    positions.append((obj.position.x, obj.position.y))
+                    zombie_positions.append((obj.position.x, obj.position.y))
                     break
 
-        return positions
+        return player_positions, zombie_positions
 
     def get_law_predictions(
         self, initial_state: WorldState, action: str
@@ -1182,13 +1178,13 @@ class ZombieMovementAnalyzer:
 
         # Sample from the environment
         print("Sampling from environment...")
-        env_positions = self.sample_environment_transitions(
-            initial_state, action, n_samples
+        env_player_positions, env_zombie_positions = (
+            self.sample_environment_transitions(initial_state, action, n_samples)
         )
 
-        # Count position frequencies
+        # Count zombie position frequencies (for backward compatibility)
         position_counts = {}
-        for pos in env_positions:
+        for pos in env_zombie_positions:
             position_counts[pos] = position_counts.get(pos, 0) + 1
 
         # Convert counts to probabilities
@@ -1219,10 +1215,10 @@ class ZombieMovementAnalyzer:
                 )
 
         # Show sample of positions for debugging
-        if len(env_positions) > 10:
-            print(f"Sample positions: {env_positions[:10]}...")
+        if len(env_zombie_positions) > 10:
+            print(f"Sample positions: {env_zombie_positions[:10]}...")
         else:
-            print(f"All positions: {env_positions}")
+            print(f"All positions: {env_zombie_positions}")
 
         # Render the initial state
         base_image = observation(initial_state, render_size=(256, 256))
@@ -1276,13 +1272,13 @@ class ZombieMovementAnalyzer:
 
         # Sample from the environment
         print("Sampling from environment...")
-        env_positions = self.sample_environment_transitions(
-            initial_state, action, n_samples
+        env_player_positions, env_zombie_positions = (
+            self.sample_environment_transitions(initial_state, action, n_samples)
         )
 
-        # Count position frequencies
+        # Count zombie position frequencies (for backward compatibility)
         position_counts = {}
-        for pos in env_positions:
+        for pos in env_zombie_positions:
             position_counts[pos] = position_counts.get(pos, 0) + 1
 
         # Convert counts to probabilities
@@ -1342,22 +1338,36 @@ class ZombieMovementAnalyzer:
 
         # Sample from the environment
         print("Sampling from environment...")
-        env_positions = self.sample_environment_transitions(
-            initial_state, action, n_samples
+        env_player_positions, env_zombie_positions = (
+            self.sample_environment_transitions(initial_state, action, n_samples)
         )
 
-        # Count position frequencies
-        position_counts = {}
-        for pos in env_positions:
-            position_counts[pos] = position_counts.get(pos, 0) + 1
+        # Count player position frequencies
+        player_position_counts = {}
+        for pos in env_player_positions:
+            player_position_counts[pos] = player_position_counts.get(pos, 0) + 1
+
+        # Count zombie position frequencies
+        zombie_position_counts = {}
+        for pos in env_zombie_positions:
+            zombie_position_counts[pos] = zombie_position_counts.get(pos, 0) + 1
 
         # Convert counts to probabilities
-        env_distribution = {
-            pos: count / n_samples for pos, count in position_counts.items()
+        env_player_distribution = {
+            pos: count / n_samples for pos, count in player_position_counts.items()
+        }
+        env_zombie_distribution = {
+            pos: count / n_samples for pos, count in zombie_position_counts.items()
         }
 
-        print(f"Environment sampling found {len(env_distribution)} unique positions")
-        print(f"Environment distribution: {env_distribution}")
+        print(
+            f"Environment player sampling found {len(env_player_distribution)} unique positions"
+        )
+        print(f"Environment player distribution: {env_player_distribution}")
+        print(
+            f"Environment zombie sampling found {len(env_zombie_distribution)} unique positions"
+        )
+        print(f"Environment zombie distribution: {env_zombie_distribution}")
 
         # Get law predictions
         print("Getting law predictions...")
@@ -1370,14 +1380,15 @@ class ZombieMovementAnalyzer:
         print(f"Zombie predictions found {len(zombie_predictions)} unique positions")
         print(f"Zombie distribution: {zombie_predictions}")
 
-        # Render environment sampling (zombie only)
-        env_rendered = render_with_distribution_overlay(
+        # Render environment sampling (both player and zombie)
+        env_rendered = render_with_dual_distribution_overlay(
             initial_state,
-            env_distribution,
+            env_player_distribution,
+            env_zombie_distribution,
             view_dims=(9, 9),
             render_size=(256, 256),
             alpha=0.8,
-            white_background_for_distributions=True,
+            white_background_for_distributions=False,  # Turn off white backgrounds
         )
 
         # Render law predictions (both player and zombie)
@@ -1388,7 +1399,7 @@ class ZombieMovementAnalyzer:
             view_dims=(9, 9),
             render_size=(256, 256),
             alpha=0.8,
-            white_background_for_distributions=True,
+            white_background_for_distributions=False,  # Turn off white backgrounds
         )
 
         # Also render the base image for reference
@@ -1404,12 +1415,14 @@ class ZombieMovementAnalyzer:
 
         # Environment sampling
         axes[1].imshow(env_rendered)
-        axes[1].set_title(f"Environment Sampling - Zombie ({n_samples} samples)")
+        axes[1].set_title(
+            f"Environment Sampling - Player & Zombie ({n_samples} samples)"
+        )
         axes[1].axis("off")
 
         # Law predictions
         axes[2].imshow(law_rendered)
-        axes[2].set_title("Law Predictions - Player (Blue) & Zombie (Orange)")
+        axes[2].set_title("Law Predictions - Player & Zombie (Orange)")
         axes[2].axis("off")
 
         plt.tight_layout()
