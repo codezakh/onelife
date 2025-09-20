@@ -35,6 +35,7 @@ World → View → Pixel
 1. World to View:
    - Calculate relative position from player: (world_x - player_x, world_y - player_y)
    - Add view center offset: (view_center_x + rel_x, view_center_y + rel_y)
+   - View center is (4, 3) for 9x9 view (adjusted for off-by-one fix)
    - Check bounds: position must be within [0, view_width) x [0, view_height)
 
 2. View to Pixel:
@@ -46,9 +47,9 @@ EXAMPLE:
 ========
 Player at world (16, 16), zombie at world (17, 16):
 - Relative position: (17-16, 16-16) = (1, 0)
-- View coordinates: (4+1, 4+0) = (5, 4) in 9x9 view
-- Pixel coordinates: (5*28, 4*28) = (140, 112) in 256x256 image
-- Draw 28x28 pixel square at (140, 112)
+- View coordinates: (4+1, 3+0) = (5, 3) in 9x9 view
+- Pixel coordinates: (5*28, 3*28) = (140, 84) in 256x256 image
+- Draw 28x28 pixel square at (140, 84)
 """
 
 import numpy as np
@@ -172,7 +173,7 @@ def world_to_view_coordinates(
     rel_y = world_y - player_y
 
     # Convert to view coordinates (view is centered on player)
-    # FIXED: Adjust view center to fix off-by-one error
+    # View center is (4, 3) for 9x9 view to align with game's coordinate system
     view_center_x = view_width // 2
     view_center_y = view_height // 2 - 1
     view_x = view_center_x + rel_x
@@ -380,19 +381,6 @@ class DistributionVisualizer:
                                 + (1 - alpha) * overlay_image[py, px]
                             )
 
-                # Debug: Draw a bright white pixel at the exact center of the square
-                center_px = pixel_x + square_width // 2
-                center_py = pixel_y + square_height // 2
-                if (
-                    0 <= center_px < overlay_image.shape[1]
-                    and 0 <= center_py < overlay_image.shape[0]
-                ):
-                    overlay_image[center_py, center_px] = [
-                        255,
-                        255,
-                        255,
-                    ]  # Bright white
-
         return overlay_image.astype(np.uint8)
 
     @staticmethod
@@ -596,25 +584,10 @@ class ZombieMovementAnalyzer:
             f"Creating environment sampling visualization with {n_samples} samples..."
         )
 
-        # Debug: Show initial zombie position and coordinate mapping
+        # Show initial setup
         for obj in initial_state.objects:
             if isinstance(obj, ZombieState):
                 print(f"Initial zombie position: ({obj.position.x}, {obj.position.y})")
-                # Test coordinate mapping for zombie position
-                zombie_view_coords = world_to_view_coordinates(
-                    obj.position.x,
-                    obj.position.y,
-                    initial_state.player.position.x,
-                    initial_state.player.position.y,
-                    9,
-                    9,
-                )
-                if zombie_view_coords:
-                    zombie_pixel_coords = view_to_pixel_coordinates(
-                        zombie_view_coords[0], zombie_view_coords[1], 9, 9, 256, 256
-                    )
-                    print(f"Zombie view coordinates: {zombie_view_coords}")
-                    print(f"Zombie pixel coordinates: {zombie_pixel_coords}")
                 break
 
         print(
@@ -641,7 +614,7 @@ class ZombieMovementAnalyzer:
         print(f"Environment sampling found {len(env_distribution)} unique positions")
         print(f"Position distribution: {env_distribution}")
 
-        # Debug: Show coordinate mapping for each unique position
+        # Show coordinate mapping for sampled positions
         print("Coordinate mapping for sampled positions:")
         for pos, prob in env_distribution.items():
             view_coords = world_to_view_coordinates(
@@ -659,23 +632,6 @@ class ZombieMovementAnalyzer:
                 print(
                     f"  World {pos} -> View {view_coords} -> Pixel {pixel_coords} (prob: {prob:.2f})"
                 )
-
-        # Debug: Let's also check the player's coordinate mapping
-        player_view_coords = world_to_view_coordinates(
-            initial_state.player.position.x,
-            initial_state.player.position.y,
-            initial_state.player.position.x,
-            initial_state.player.position.y,
-            9,
-            9,
-        )
-        if player_view_coords:
-            player_pixel_coords = view_to_pixel_coordinates(
-                player_view_coords[0], player_view_coords[1], 9, 9, 256, 256
-            )
-            print(
-                f"  Player: World {initial_state.player.position.x, initial_state.player.position.y} -> View {player_view_coords} -> Pixel {player_pixel_coords}"
-            )
 
         # Show sample of positions for debugging
         if len(env_positions) > 10:
@@ -697,58 +653,18 @@ class ZombieMovementAnalyzer:
             alpha=0.7,
         )
 
-        # Create a debug visualization to test coordinate mapping
-        debug_overlay = base_image.copy().astype(np.float32)
-
-        # Draw a bright green square at the zombie's exact position
-        zombie_obj = None
-        for obj in initial_state.objects:
-            if isinstance(obj, ZombieState):
-                zombie_obj = obj
-                break
-
-        if zombie_obj:
-            zombie_view_coords = world_to_view_coordinates(
-                zombie_obj.position.x,
-                zombie_obj.position.y,
-                initial_state.player.position.x,
-                initial_state.player.position.y,
-                9,
-                9,
-            )
-            if zombie_view_coords:
-                zombie_pixel_coords = view_to_pixel_coordinates(
-                    zombie_view_coords[0], zombie_view_coords[1], 9, 9, 256, 256
-                )
-                pixel_x, pixel_y, square_width, square_height = zombie_pixel_coords
-
-                # Draw bright green square at zombie position
-                for dx in range(square_width):
-                    for dy in range(square_height):
-                        px, py = pixel_x + dx, pixel_y + dy
-                        if (
-                            0 <= px < debug_overlay.shape[1]
-                            and 0 <= py < debug_overlay.shape[0]
-                        ):
-                            debug_overlay[py, px] = [0, 255, 0]  # Bright green
-
         # Create visualization
-        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
 
         # Base image
         axes[0].imshow(base_image)
         axes[0].set_title("Base Game State")
         axes[0].axis("off")
 
-        # Debug: Zombie position marker
-        axes[1].imshow(debug_overlay.astype(np.uint8))
-        axes[1].set_title("Debug: Zombie Position (Green)")
-        axes[1].axis("off")
-
         # Environment sampling overlay
-        axes[2].imshow(env_overlay)
-        axes[2].set_title(f"Environment Sampling ({n_samples} samples)")
-        axes[2].axis("off")
+        axes[1].imshow(env_overlay)
+        axes[1].set_title(f"Environment Sampling ({n_samples} samples)")
+        axes[1].axis("off")
 
         plt.tight_layout()
         plt.savefig(
