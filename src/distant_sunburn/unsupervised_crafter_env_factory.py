@@ -95,6 +95,8 @@ If an action has no effect, repeating it over and over again is not a good strat
 If an action has no effect, you may not have fulfilled the preconditions for the action to have an effect.
 Try to get actions to succeed by thinking about necessary preconditions and trying to fulfill them.
 Try out as many of the actions as you can, do not get stuck repeating a single action.
+Aim to experience a broad range of mechanics, rather than getting stuck on a single category.
+Before starting, set some objectives for yourself to guide your exploration.
 
 The following are the only valid actions you can take:
 
