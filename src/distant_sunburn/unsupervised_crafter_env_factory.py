@@ -97,6 +97,19 @@ class UnsupervisedTextRenderer:
         """Calculate Manhattan distance between two positions."""
         return abs(pos1.x - pos2.x) + abs(pos1.y - pos2.y)
 
+    def _facing_to_direction(self, facing: Position) -> str:
+        """Convert facing position tuple to directional name."""
+        if facing.x == 0 and facing.y == 1:
+            return "south"
+        elif facing.x == 0 and facing.y == -1:
+            return "north"
+        elif facing.x == 1 and facing.y == 0:
+            return "east"
+        elif facing.x == -1 and facing.y == 0:
+            return "west"
+        else:
+            return f"({facing.x}, {facing.y})"  # Fallback for unexpected values
+
     def _get_direction_description(self, from_pos: Position, to_pos: Position) -> str:
         """Get relative direction description from one position to another."""
         dx = to_pos.x - from_pos.x
@@ -401,7 +414,7 @@ class UnsupervisedTextRenderer:
         pos = world_state.player.position
         facing = world_state.player.facing
         result += f"- position: ({pos.x}, {pos.y})\n"
-        result += f"- facing: ({facing.x}, {facing.y})\n"
+        result += f"- facing: {self._facing_to_direction(facing)}\n"
 
         # Show sleeping status
         result += f"- sleeping: {world_state.player.sleeping}\n"
@@ -453,14 +466,14 @@ class UnsupervisedTextRenderer:
         pos = world_state.player.position
         facing = world_state.player.facing
         result += f"- position: ({pos.x}, {pos.y})\n"
-        result += f"- facing: ({facing.x}, {facing.y})\n"
-        
+        result += f"- facing: {self._facing_to_direction(facing)}\n"
+
         # Show sleeping status
         result += f"- sleeping: {world_state.player.sleeping}\n"
-        
+
         # Show current action
         result += f"- current action: {world_state.player.action}\n"
-        
+
         # Show internal state variables
         result += f"- thirst: {world_state.player.thirst:.2f}\n"
         result += f"- hunger: {world_state.player.hunger:.2f}\n"
