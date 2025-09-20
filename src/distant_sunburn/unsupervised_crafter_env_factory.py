@@ -48,6 +48,60 @@ MAP_DISPLAY_ACTION_TO_ENGINE_ACTION = {
 }
 
 
+MAP_DISPLAY_ACTION_TO_DESCRIPTION = {
+    "Noop": "Used to do nothing.",
+    "Move West": "Used to move west.",
+    "Move East": "Used to move east.",
+    "Move North": "Used to move north.",
+    "Move South": "Used to move south.",
+    "Do": "Used to interact with the world. Depending on the target, can be used for resource collection or combat.",
+    "Sleep": "Puts the player to sleep.",
+    "Place Stone": "Used to place a stone in the world.",
+    "Place Table": "Used to place a table in the world.",
+    "Place Furnace": "Used to place a furnace in the world.",
+    "Place Plant": "Used to place a plant in the world.",
+    "Make Wood Pickaxe": "Used to create a wood pickaxe.",
+    "Make Stone Pickaxe": "Used to create a stone pickaxe.",
+    "Make Iron Pickaxe": "Used to create an iron pickaxe.",
+    "Make Wood Sword": "Used to create a wood sword.",
+    "Make Stone Sword": "Used to create a stone sword.",
+    "Make Iron Sword": "Used to create an iron sword.",
+}
+
+
+def get_instruction_prompt():
+    action_strings = ",\n".join(
+        f"{action}: {MAP_DISPLAY_ACTION_TO_DESCRIPTION[action]}"
+        for action in MAP_DISPLAY_ACTION_TO_ENGINE_ACTION
+    )
+    instruction_prompt = f"""
+You are an explorer in an unknown digital world. Your mission is to experience as many of the world's hidden mechanics as possible. Your recorded experiences will be analyzed later to create a complete map of the world's physical laws.
+
+The world's laws follow a simple pattern: `IF (a specific situation occurs) AND (you take an ACTION), THEN (a certain outcome happens).`
+
+To succeed, you must trigger as many different `IF-THEN` scenarios as you can.
+
+**What to Expect in the World:**
+This world is complex and may be dangerous.
+- **Hostile Entities:** You may encounter creatures that are hostile and will attack you.
+- **Resource Collection:** The world contains raw materials that can be gathered, though there may be preconditions for collection.
+- **Item Production:** You have the ability to craft useful items from raw materials, though there may be preconditions for production.
+- **Combat:** You can engage in combat with the entities you encounter.
+
+Your primary goal is to discover the rules governing these activities. 
+You will need to explore the game world by moving around and interacting with the entitiesa and materials in the world.
+It is important that you survive long enough to experience as many of the world's mechanics as possible.
+
+The following are the only valid actions you can take:
+
+{action_strings}.
+
+You will now receive observations from the world. Begin your exploration.
+""".strip()
+
+    return instruction_prompt
+
+
 @dataclass
 class TextRendererOutput:
     long_term_context: str
@@ -532,7 +586,6 @@ class UnsupervisedCrafterEnvironmentConfig(EnvironmentConfig):
     area: tuple[int, int]
     view: tuple[int, int]
     size: tuple[int, int]
-    text_renderer: Any
     instruction_prompt: str
     reward: bool
     seed: Optional[int] = None
@@ -562,7 +615,7 @@ class LanguageSymbolicWrapper:
     def __init__(self, config: UnsupervisedCrafterEnvironmentConfig):
         self.config = config
         self.base_env = build_base_environment(config)
-        self.renderer = config.text_renderer
+        self.renderer = UnsupervisedTextRenderer()
         self.step_count = 0
         self.score_tracker = 0
         self.achievements = None
