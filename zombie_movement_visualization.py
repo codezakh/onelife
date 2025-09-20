@@ -501,7 +501,7 @@ def render_with_distribution_overlay(
         pixel_pos = view_pos * unit
 
         # Create colored square based on probability
-        color = _prob_to_color(prob)
+        color = _prob_to_color(prob, "heatmap")
 
         # Draw distribution square
         if white_background_for_distributions:
@@ -519,7 +519,7 @@ def render_with_distribution_overlay(
                     if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
                         # Use probability-based alpha for better visibility
                         prob_alpha = alpha * (
-                            0.3 + 0.7 * prob
+                            0.6 + 0.4 * prob
                         )  # Higher prob = more opaque
                         # Blend with white background
                         canvas[py, px] = prob_alpha * np.array(color) + (
@@ -527,7 +527,7 @@ def render_with_distribution_overlay(
                         ) * np.array([255, 255, 255])
         else:
             # Original behavior: blend with ground tiles
-            prob_alpha = alpha * (0.5 + 0.5 * prob)  # Higher prob = more opaque
+            prob_alpha = alpha * (0.6 + 0.4 * prob)  # Higher prob = more opaque
 
             for dx in range(unit[0]):
                 for dy in range(unit[1]):
@@ -644,11 +644,12 @@ def render_with_dual_distribution_overlay(
                     if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
                         canvas[py, px] = [255, 255, 255]  # White background
 
-        # Draw player distribution (orange)
+        # Draw player distribution (heatmap)
         if (world_x, world_y) in player_distributions:
             prob = player_distributions[(world_x, world_y)]
-            color = _prob_to_color(prob, "orange")
-            prob_alpha = alpha * (0.3 + 0.7 * prob)
+            color = _prob_to_color(prob, "heatmap")
+            # Use higher alpha for better visibility
+            prob_alpha = alpha * (0.6 + 0.4 * prob)
 
             for dx in range(unit[0]):
                 for dy in range(unit[1]):
@@ -660,11 +661,12 @@ def render_with_dual_distribution_overlay(
                             + (1 - prob_alpha) * canvas[py, px]
                         )
 
-        # Draw zombie distribution (orange)
+        # Draw zombie distribution (heatmap)
         if (world_x, world_y) in zombie_distributions:
             prob = zombie_distributions[(world_x, world_y)]
-            color = _prob_to_color(prob, "orange")
-            prob_alpha = alpha * (0.3 + 0.7 * prob)
+            color = _prob_to_color(prob, "heatmap")
+            # Use higher alpha for better visibility
+            prob_alpha = alpha * (0.6 + 0.4 * prob)
 
             for dx in range(unit[0]):
                 for dy in range(unit[1]):
@@ -767,25 +769,45 @@ def _draw_alpha_texture(
             canvas[y1:y2, x1:x2] = texture_slice
 
 
-def _prob_to_color(prob: float, color_type: str = "orange") -> tuple[int, int, int]:
+def _prob_to_color(prob: float, color_type: str = "heatmap") -> tuple[int, int, int]:
     """
-    Convert probability to RGB color using a consistent orange scheme.
+    Convert probability to RGB color using a heat map scheme.
 
     Args:
         prob: Probability value between 0 and 1
-        color_type: Unused (kept for compatibility), always uses orange
+        color_type: Unused (kept for compatibility), always uses heatmap
 
     Returns:
         RGB color tuple (r, g, b)
     """
     # Clamp probability to [0, 1]
     prob = max(0.0, min(1.0, prob))
-    intensity = 0.4 + 0.6 * prob  # Range from 0.4 to 1.0 for good visibility
 
-    # Use orange for both player and zombie predictions
-    r = int(255 * intensity)  # Red component
-    g = int(165 * intensity)  # Green component
-    b = int(0)  # No blue component for pure orange
+    # Heat map color scheme: blue (low) -> green -> yellow -> red (high)
+    if prob < 0.25:
+        # Blue to cyan
+        t = prob / 0.25
+        r = int(0)
+        g = int(128 * t)
+        b = int(255)
+    elif prob < 0.5:
+        # Cyan to green
+        t = (prob - 0.25) / 0.25
+        r = int(0)
+        g = int(128 + 127 * t)
+        b = int(255 - 255 * t)
+    elif prob < 0.75:
+        # Green to yellow
+        t = (prob - 0.5) / 0.25
+        r = int(255 * t)
+        g = int(255)
+        b = int(0)
+    else:
+        # Yellow to red
+        t = (prob - 0.75) / 0.25
+        r = int(255)
+        g = int(255 - 255 * t)
+        b = int(0)
 
     return (r, g, b)
 
@@ -920,10 +942,10 @@ class DistributionVisualizer:
                 pixel_x, pixel_y, square_width, square_height = pixel_coords
 
                 # Create colored square based on probability
-                color = DistributionVisualizer._prob_to_color(prob)
+                color = _prob_to_color(prob, "heatmap")
 
                 # Use probability-based alpha for better visibility
-                prob_alpha = alpha * (0.3 + 0.7 * prob)  # Higher prob = more opaque
+                prob_alpha = alpha * (0.6 + 0.4 * prob)  # Higher prob = more opaque
 
                 # Draw square
                 for dx in range(square_width):
