@@ -598,6 +598,7 @@ class UnsupervisedCrafterEnvironmentConfig(EnvironmentConfig):
     task: str = "open_ended"
     max_episode_steps: int = Field(default=2000)
     render_image: bool = Field(default=False)
+    instruction_prompt: str = Field(default=get_instruction_prompt())
 
 
 def build_base_environment(
@@ -743,7 +744,7 @@ class LanguageSymbolicWrapper:
             return self.default_action
 
     def get_instruction_prompt(self, instructions: str | None = None) -> str:
-        return get_instruction_prompt()
+        return self.config.instruction_prompt
 
 
 implements(EnvironmentProtocol[WorldState])(LanguageSymbolicWrapper)
