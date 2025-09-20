@@ -32,10 +32,11 @@ COORDINATE TRANSFORMATION PIPELINE:
 
 World → View → Pixel
 
-1. World to View:
-   - Calculate relative position from player: (world_x - player_x, world_y - player_y)
+1. World to View (with off-by-one fix):
+   - Calculate relative position: (world_x - player_x, world_y - player_y)
    - Add view center offset: (view_center_x + rel_x, view_center_y + rel_y)
-   - View center is (4, 3) for 9x9 view (adjusted for off-by-one fix)
+   - View center is (4, 3) for 9x9 view (Y coordinate has -1 adjustment)
+   - This accounts for the off-by-one error discovered during testing
    - Check bounds: position must be within [0, view_width) x [0, view_height)
 
 2. View to Pixel:
@@ -45,9 +46,10 @@ World → View → Pixel
 
 EXAMPLE:
 ========
-Player at world (16, 16), zombie at world (17, 16):
+Player at world (16, 16), zombie at world (17, 16) in 9x9 view:
 - Relative position: (17-16, 16-16) = (1, 0)
-- View coordinates: (4+1, 3+0) = (5, 3) in 9x9 view
+- View center: (4, 3) for 9x9 view (Y has -1 adjustment)
+- View coordinates: (4+1, 3+0) = (5, 3)
 - Pixel coordinates: (5*28, 3*28) = (140, 84) in 256x256 image
 - Draw 28x28 pixel square at (140, 84)
 """
@@ -160,6 +162,9 @@ def world_to_view_coordinates(
     """
     Convert world coordinates to view coordinates.
 
+    This function accounts for the off-by-one error in the Y coordinate
+    that was discovered during testing to align with the game's sprite rendering.
+
     Args:
         world_x, world_y: World position to convert
         player_x, player_y: Player's world position
@@ -173,7 +178,7 @@ def world_to_view_coordinates(
     rel_y = world_y - player_y
 
     # Convert to view coordinates (view is centered on player)
-    # View center is (4, 3) for 9x9 view to align with game's coordinate system
+    # FIXED: View center Y needs -1 adjustment to align with sprite rendering
     view_center_x = view_width // 2
     view_center_y = view_height // 2 - 1
     view_x = view_center_x + rel_x
@@ -227,7 +232,7 @@ def world_to_pixel_coordinates(
     render_height: int,
 ) -> tuple[int, int, int, int] | None:
     """
-    Convert world coordinates directly to pixel coordinates.
+    Convert world coordinates directly to pixel coordinates using LocalView coordinate system.
 
     Args:
         world_x, world_y: World position to convert
@@ -252,6 +257,38 @@ def world_to_pixel_coordinates(
     return view_to_pixel_coordinates(
         view_x, view_y, view_width, view_height, render_width, render_height
     )
+
+
+def world_to_view_coordinates_unified(
+    world_pos: np.ndarray,
+    player_pos: np.ndarray,
+    view_dims: tuple[int, int],
+) -> np.ndarray | None:
+    """
+    Unified function to convert world coordinates to view coordinates.
+
+    This function accounts for the off-by-one error in the Y coordinate
+    that was discovered during testing to align with the game's sprite rendering.
+
+    Args:
+        world_pos: World position as numpy array [x, y]
+        player_pos: Player's world position as numpy array [x, y]
+        view_dims: View dimensions as (width, height)
+
+    Returns:
+        View position as numpy array [x, y] if within bounds, None otherwise
+    """
+    # FIXED: Apply the same off-by-one fix for Y coordinate
+    offset = np.array([view_dims[0] // 2, view_dims[1] // 2 - 1])
+    center = player_pos
+
+    view_pos = world_pos - center + offset
+
+    # Check if position is within view bounds
+    if 0 <= view_pos[0] < view_dims[0] and 0 <= view_pos[1] < view_dims[1]:
+        return view_pos
+    else:
+        return None
 
 
 # ============================================================================
@@ -308,27 +345,29 @@ def render_with_distribution_overlay(
     textures = engine.Textures(constants.root / "assets")
 
     # STEP 1: Draw ground tiles/materials (same as LocalView)
-    offset = np.array(view_dims) // 2
     center = np.array(player.pos)
 
     for x in range(view_dims[0]):
         for y in range(view_dims[1]):
-            pos = center + np.array([x, y]) - offset
-            if not _inside_world_bounds(pos, world.area):
+            # Convert view coordinates to world coordinates
+            view_pos = np.array([x, y])
+            offset = np.array(view_dims) // 2
+            world_pos = center + view_pos - offset
+
+            if not _inside_world_bounds(world_pos, world.area):
                 continue
-            material, _ = world[pos]
+            material, _ = world[world_pos]
             texture = textures.get(material, unit)
-            _draw_texture(canvas, np.array([x, y]) * unit, texture)
+            _draw_texture(canvas, view_pos * unit, texture)
 
     # STEP 2: Draw probability distribution overlay
-    # Use the same coordinate system as the ground tiles for consistency
+    # Use unified coordinate mapping for consistency
     for (world_x, world_y), prob in distributions.items():
-        # Convert world coordinates to view coordinates using the same logic as ground tiles
+        # Convert world coordinates to view coordinates using unified function
         world_pos = np.array([world_x, world_y])
-        view_pos = world_pos - center + offset
+        view_pos = world_to_view_coordinates_unified(world_pos, center, view_dims)
 
-        # Check if position is within view bounds
-        if not _inside_view_bounds(view_pos, view_dims):
+        if view_pos is None:
             continue
 
         # Convert to pixel coordinates
@@ -349,11 +388,12 @@ def render_with_distribution_overlay(
 
     # STEP 3: Draw sprites/objects (same as LocalView)
     for obj in world.objects:
-        pos = obj.pos - center + offset
-        if not _inside_view_bounds(pos, view_dims):
+        # Use unified coordinate mapping for consistency
+        view_pos = world_to_view_coordinates_unified(obj.pos, center, view_dims)
+        if view_pos is None:
             continue
         texture = textures.get(obj.texture, unit)
-        _draw_alpha_texture(canvas, pos * unit, texture)
+        _draw_alpha_texture(canvas, view_pos * unit, texture)
 
     # Apply lighting and other effects (same as LocalView)
     canvas = _apply_lighting(canvas, world.daylight)
