@@ -302,6 +302,7 @@ def render_with_distribution_overlay(
     view_dims: tuple[int, int] = (9, 9),
     render_size: tuple[int, int] = (256, 256),
     alpha: float = 0.6,
+    white_background_for_distributions: bool = True,
 ) -> np.ndarray:
     """
     Render the game world with probability distribution overlay between ground and sprites.
@@ -316,6 +317,8 @@ def render_with_distribution_overlay(
         view_dims: View dimensions of the game
         render_size: Render size of the image
         alpha: Transparency of the distribution overlay
+        white_background_for_distributions: If True, draw distributions over white squares
+                                           for better visibility
 
     Returns:
         Rendered image with distribution overlay
@@ -377,14 +380,40 @@ def render_with_distribution_overlay(
         color = _prob_to_color(prob)
 
         # Draw distribution square
-        for dx in range(unit[0]):
-            for dy in range(unit[1]):
-                px, py = int(pixel_pos[0] + dx), int(pixel_pos[1] + dy)
-                if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
-                    # Blend with existing pixel (ground)
-                    canvas[py, px] = (
-                        alpha * np.array(color) + (1 - alpha) * canvas[py, px]
-                    )
+        if white_background_for_distributions:
+            # Draw white background first for better contrast
+            for dx in range(unit[0]):
+                for dy in range(unit[1]):
+                    px, py = int(pixel_pos[0] + dx), int(pixel_pos[1] + dy)
+                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
+                        canvas[py, px] = [255, 255, 255]  # White background
+
+            # Then draw the colored distribution on top
+            for dx in range(unit[0]):
+                for dy in range(unit[1]):
+                    px, py = int(pixel_pos[0] + dx), int(pixel_pos[1] + dy)
+                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
+                        # Use probability-based alpha for better visibility
+                        prob_alpha = alpha * (
+                            0.5 + 0.5 * prob
+                        )  # Higher prob = more opaque
+                        # Blend with white background
+                        canvas[py, px] = prob_alpha * np.array(color) + (
+                            1 - prob_alpha
+                        ) * np.array([255, 255, 255])
+        else:
+            # Original behavior: blend with ground tiles
+            prob_alpha = alpha * (0.5 + 0.5 * prob)  # Higher prob = more opaque
+
+            for dx in range(unit[0]):
+                for dy in range(unit[1]):
+                    px, py = int(pixel_pos[0] + dx), int(pixel_pos[1] + dy)
+                    if 0 <= px < canvas.shape[1] and 0 <= py < canvas.shape[0]:
+                        # Blend with existing pixel (ground)
+                        canvas[py, px] = (
+                            prob_alpha * np.array(color)
+                            + (1 - prob_alpha) * canvas[py, px]
+                        )
 
     # STEP 3: Draw sprites/objects (same as LocalView)
     for obj in world.objects:
@@ -478,19 +507,35 @@ def _draw_alpha_texture(
 
 
 def _prob_to_color(prob: float) -> tuple[int, int, int]:
-    """Convert probability to RGB color (red for high, blue for low)."""
+    """
+    Convert probability to RGB color using a monotonically increasing scheme.
+
+    Uses a bright yellow/orange color that works well over dark green grass.
+    Higher probabilities get brighter and more saturated.
+
+    Args:
+        prob: Probability value between 0 and 1
+
+    Returns:
+        RGB color tuple (r, g, b)
+    """
     # Clamp probability to [0, 1]
     prob = max(0.0, min(1.0, prob))
 
-    # Create color gradient from blue (low) to red (high)
-    if prob < 0.5:
-        # Blue to purple
-        intensity = prob * 2
-        return (int(127 * intensity), 0, int(255 * (1 - intensity)))
-    else:
-        # Purple to red
-        intensity = (prob - 0.5) * 2
-        return (int(127 + 128 * intensity), 0, int(127 * (1 - intensity)))
+    # Use a bright yellow/orange color that contrasts well with dark green
+    # Base color: bright yellow-orange
+    base_r, base_g, base_b = 255, 200, 0
+
+    # Scale intensity based on probability
+    # For low probabilities, use a dimmer version
+    # For high probabilities, use the full bright color
+    intensity = 0.3 + 0.7 * prob  # Range from 0.3 to 1.0
+
+    r = int(base_r * intensity)
+    g = int(base_g * intensity)
+    b = int(base_b * intensity)
+
+    return (r, g, b)
 
 
 def _apply_lighting(canvas: np.ndarray, daylight: float) -> np.ndarray:
@@ -625,6 +670,9 @@ class DistributionVisualizer:
                 # Create colored square based on probability
                 color = DistributionVisualizer._prob_to_color(prob)
 
+                # Use probability-based alpha for better visibility
+                prob_alpha = alpha * (0.5 + 0.5 * prob)  # Higher prob = more opaque
+
                 # Draw square
                 for dx in range(square_width):
                     for dy in range(square_height):
@@ -635,24 +683,21 @@ class DistributionVisualizer:
                         ):
                             # Blend with existing pixel
                             overlay_image[py, px] = (
-                                alpha * np.array(color)
-                                + (1 - alpha) * overlay_image[py, px]
+                                prob_alpha * np.array(color)
+                                + (1 - prob_alpha) * overlay_image[py, px]
                             )
 
         return overlay_image.astype(np.uint8)
 
     @staticmethod
     def _prob_to_color(prob: float) -> tuple[int, int, int]:
-        """Convert probability to RGB color (red for high, blue for low)."""
-        # Clamp probability to [0, 1]
-        prob = max(0, min(1, prob))
+        """
+        Convert probability to RGB color using a monotonically increasing scheme.
 
-        # Red for high probability, blue for low probability
-        red = int(255 * prob)
-        blue = int(255 * (1 - prob))
-        green = 0
-
-        return (red, green, blue)
+        Uses the same bright yellow/orange color scheme as the main _prob_to_color function.
+        """
+        # Use the same color scheme as the main function
+        return _prob_to_color(prob)
 
 
 class ZombieMovementAnalyzer:
@@ -966,13 +1011,14 @@ class ZombieMovementAnalyzer:
         print(f"Environment sampling found {len(env_distribution)} unique positions")
         print(f"Position distribution: {env_distribution}")
 
-        # Render using custom rendering function
+        # Render using custom rendering function with white backgrounds for better visibility
         custom_rendered = render_with_distribution_overlay(
             initial_state,
             env_distribution,
             view_dims=(9, 9),
             render_size=(256, 256),
-            alpha=0.7,
+            alpha=0.8,  # Higher alpha since we have white background
+            white_background_for_distributions=True,
         )
 
         # Also render the base image for comparison
@@ -986,9 +1032,9 @@ class ZombieMovementAnalyzer:
         axes[0].set_title("Original Rendering (Overlay on Top)")
         axes[0].axis("off")
 
-        # Custom rendering (distributions under sprites)
+        # Custom rendering (distributions under sprites with white backgrounds)
         axes[1].imshow(custom_rendered)
-        axes[1].set_title("Custom Rendering (Distributions Under Sprites)")
+        axes[1].set_title("Custom Rendering (Distributions on White Backgrounds)")
         axes[1].axis("off")
 
         plt.tight_layout()
