@@ -283,9 +283,15 @@ class LawMixture(Generic[SymbolicStateT, ActionT]):
             weighted_law.law.effect(state_copy, action)
 
             # Extract predictions for each attribute
-            attr_predictions = self.observable_extractor.extract_attribute_predictions(
-                state_copy
-            )
+            try:
+                attr_predictions = (
+                    self.observable_extractor.extract_attribute_predictions(state_copy)
+                )
+            except Exception:
+                logger.opt(exception=True).error(
+                    f"Error in extract_attribute_predictions for {weighted_law.law.__name__}"
+                )
+                continue
 
             # Group by attribute name
             for attr_name, attr_prediction in attr_predictions.items():
