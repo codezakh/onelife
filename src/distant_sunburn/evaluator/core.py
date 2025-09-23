@@ -397,6 +397,9 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         The per-trial means ensure each scenario is summarized by a single
         number per trial, so scenarios with many transitions do not dominate.
         """
+        logger.info(
+            f"Evaluating {len(transitions_for_source)} transitions for scenario for {num_trials} trials"
+        )
         metrics_accumulator: list[list[EvaluationMetrics]] = []
         for _ in range(num_trials):
             metrics_for_trial: list[EvaluationMetrics] = []
@@ -510,9 +513,13 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         ] = {}
 
         for transition_source, transitions in self.ctx.test_transitions.items():
-            metrics_by_source[transition_source] = self._evaluate_transition_source(
-                world_model, transitions, all_transitions, self.ctx.config.num_trials
-            )
+            with logger.contextualize(transition_source=transition_source):
+                metrics_by_source[transition_source] = self._evaluate_transition_source(
+                    world_model,
+                    transitions,
+                    all_transitions,
+                    self.ctx.config.num_trials,
+                )
 
         mean_metrics = self._aggregate_metrics(
             iterable=[_["mean"] for _ in metrics_by_source.values()],
