@@ -59,6 +59,7 @@ import matplotlib.pyplot as plt
 import copy
 import pickle
 import base64
+import random
 from PIL import Image, ImageDraw, ImageFont
 
 # Import crafter components
@@ -68,7 +69,7 @@ from crafter.functional_env import (
     observation,
     export_world_state,
 )
-from crafter.state_export import WorldState, ZombieState
+from crafter.state_export import WorldState, ZombieState, CowState
 from crafter.state_reconstruction import reconstruct_world_from_state
 from crafter import objects, constants
 from crafter.testing_helpers import world_utils, player_utils
@@ -130,6 +131,26 @@ class ZombieMovementLaw:
                     new_y_up,
                 ],  # pyright: ignore[reportAttributeAccessIssue]
             )
+
+
+class CowMovementLaw:
+    def precondition(self, current_state: WorldState, action: CrafterAction) -> bool:
+        return True
+
+    def effect(self, current_state: WorldState, action: CrafterAction) -> None:
+        for entity in current_state.objects:
+            if entity.name != "cow":
+                continue
+
+            cow_x = entity.position.x
+            cow_y = entity.position.y
+
+            # Possible positions are up, down, left, right
+            possible_x = [cow_x - 1, cow_x + 1, cow_x]
+            possible_y = [cow_y - 1, cow_y + 1, cow_y]
+
+            entity.position.x = DiscreteDistribution(support=possible_x)  # type: ignore
+            entity.position.y = DiscreteDistribution(support=possible_y)  # type: ignore
 
 
 class PlayerMovementLaw:
@@ -792,10 +813,11 @@ def render_with_distribution_overlay(
     return canvas
 
 
-def render_with_dual_distribution_overlay(
+def render_with_triple_distribution_overlay(
     world_state: WorldState,
     player_distributions: dict[tuple[int, int], float],
     zombie_distributions: dict[tuple[int, int], float],
+    cow_distributions: dict[tuple[int, int], float],
     view_dims: tuple[int, int] = (9, 9),
     render_size: tuple[int, int] = (256, 256),
     alpha: float = 0.6,
@@ -803,12 +825,13 @@ def render_with_dual_distribution_overlay(
     show_labels: bool = True,
 ) -> np.ndarray:
     """
-    Render the game world with both player and zombie probability distributions.
+    Render the game world with player, zombie, and cow probability distributions.
 
     Args:
         world_state: The world state to render
         player_distributions: Dict mapping (x, y) world positions to player probabilities
         zombie_distributions: Dict mapping (x, y) world positions to zombie probabilities
+        cow_distributions: Dict mapping (x, y) world positions to cow probabilities
         view_dims: View dimensions of the game
         render_size: Render size of the image
         alpha: Transparency of the distribution overlay
@@ -816,7 +839,7 @@ def render_with_dual_distribution_overlay(
         show_labels: Whether to show numerical labels on the heat map squares
 
     Returns:
-        Rendered image with both distributions
+        Rendered image with all three distributions
     """
     from crafter import engine, objects, constants
     from crafter.state_reconstruction import reconstruct_world_from_state
@@ -873,6 +896,8 @@ def render_with_dual_distribution_overlay(
         all_distributions.update(player_distributions)
     if zombie_distributions:
         all_distributions.update(zombie_distributions)
+    if cow_distributions:
+        all_distributions.update(cow_distributions)
 
     if all_distributions:
         heatmap_renderer.render_distributions(
@@ -923,6 +948,8 @@ def render_with_dual_distribution_overlay(
             all_distributions.update(player_distributions)
         if zombie_distributions:
             all_distributions.update(zombie_distributions)
+        if cow_distributions:
+            all_distributions.update(cow_distributions)
 
         if all_distributions:
             heatmap_renderer_with_labels.render_distributions(
@@ -1279,19 +1306,20 @@ class ZombieMovementAnalyzer:
     """Main class for analyzing zombie movement predictions vs reality."""
 
     def __init__(self):
-        # Use both player movement and zombie movement laws
+        # Use player, zombie, and cow movement laws
         self.player_law = LawFunctionWrapper.from_non_runtime_created(
             PlayerMovementLaw()
         )
         self.zombie_law = LawFunctionWrapper.from_non_runtime_created(
             ZombieMovementLaw()
         )
+        self.cow_law = LawFunctionWrapper.from_non_runtime_created(CowMovementLaw())
 
     def sample_environment_transitions(
         self, initial_state: WorldState, action: str, n_samples: int = 50
-    ) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    ) -> tuple[list[tuple[int, int]], list[tuple[int, int]], list[tuple[int, int]]]:
         """
-        Sample multiple transitions from the environment to get true player and zombie positions.
+        Sample multiple transitions from the environment to get true player, zombie, and cow positions.
 
         Args:
             initial_state: Starting state
@@ -1299,7 +1327,7 @@ class ZombieMovementAnalyzer:
             n_samples: Number of samples to take
 
         Returns:
-            Tuple of (player_positions, zombie_positions) where each is a list of (x, y) positions
+            Tuple of (player_positions, zombie_positions, cow_positions) where each is a list of (x, y) positions
         """
         # Convert action string to action index
         action_idx = None
@@ -1313,6 +1341,7 @@ class ZombieMovementAnalyzer:
 
         player_positions = []
         zombie_positions = []
+        cow_positions = []
 
         for i in range(n_samples):
             # Try advancing the random state instead of using different seeds
@@ -1335,20 +1364,28 @@ class ZombieMovementAnalyzer:
                     zombie_positions.append((obj.position.x, obj.position.y))
                     break
 
-        return player_positions, zombie_positions
+            # Find cow position in the next state
+            for obj in next_state.objects:
+                if isinstance(obj, CowState):
+                    cow_positions.append((obj.position.x, obj.position.y))
+                    break
 
-    def get_law_predictions(
-        self, initial_state: WorldState, action: str
-    ) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
+        return player_positions, zombie_positions, cow_positions
+
+    def get_law_predictions(self, initial_state: WorldState, action: str) -> tuple[
+        dict[tuple[int, int], float],
+        dict[tuple[int, int], float],
+        dict[tuple[int, int], float],
+    ]:
         """
-        Get both player and zombie movement predictions from our laws.
+        Get player, zombie, and cow movement predictions from our laws.
 
         Args:
             initial_state: Starting state
             action: Action to take
 
         Returns:
-            Tuple of (player_predictions, zombie_predictions) where each is a dict
+            Tuple of (player_predictions, zombie_predictions, cow_predictions) where each is a dict
             mapping (x, y) positions to predicted probabilities
         """
         # Apply player movement law on a copy of the state
@@ -1360,6 +1397,11 @@ class ZombieMovementAnalyzer:
         zombie_state = copy.deepcopy(initial_state)
         if self.zombie_law.precondition(zombie_state, action):
             self.zombie_law.effect(zombie_state, action)
+
+        # Apply cow movement law on another copy of the state
+        cow_state = copy.deepcopy(initial_state)
+        if self.cow_law.precondition(cow_state, action):
+            self.cow_law.effect(cow_state, action)
 
         # Extract player position distribution
         player_predictions = {}
@@ -1394,7 +1436,25 @@ class ZombieMovementAnalyzer:
                             zombie_predictions[(int(x_val), int(y_val))] = combined_prob
                     break
 
-        return player_predictions, zombie_predictions
+        # Extract cow position distribution
+        cow_predictions = {}
+        for obj in cow_state.objects:
+            if isinstance(obj, CowState):
+                if isinstance(obj.position.x, DiscreteDistribution) and isinstance(
+                    obj.position.y, DiscreteDistribution
+                ):
+                    x_dist = obj.position.x
+                    y_dist = obj.position.y
+
+                    for i, x_val in enumerate(x_dist.support):
+                        for j, y_val in enumerate(y_dist.support):
+                            x_prob = np.exp(x_dist.log_probs[i])
+                            y_prob = np.exp(y_dist.log_probs[j])
+                            combined_prob = x_prob * y_prob
+                            cow_predictions[(int(x_val), int(y_val))] = combined_prob
+                    break
+
+        return player_predictions, zombie_predictions, cow_predictions
 
     def create_test_visualization(
         self, initial_state: WorldState, show_labels: bool = True
@@ -1512,7 +1572,7 @@ class ZombieMovementAnalyzer:
 
         # Sample from the environment
         print("Sampling from environment...")
-        env_player_positions, env_zombie_positions = (
+        env_player_positions, env_zombie_positions, _ = (
             self.sample_environment_transitions(initial_state, action, n_samples)
         )
 
@@ -1612,7 +1672,7 @@ class ZombieMovementAnalyzer:
 
         # Sample from the environment
         print("Sampling from environment...")
-        env_player_positions, env_zombie_positions = (
+        env_player_positions, env_zombie_positions, _ = (
             self.sample_environment_transitions(initial_state, action, n_samples)
         )
 
@@ -1684,7 +1744,7 @@ class ZombieMovementAnalyzer:
 
         # Sample from the environment
         print("Sampling from environment...")
-        env_player_positions, env_zombie_positions = (
+        env_player_positions, env_zombie_positions, env_cow_positions = (
             self.sample_environment_transitions(initial_state, action, n_samples)
         )
 
@@ -1698,12 +1758,20 @@ class ZombieMovementAnalyzer:
         for pos in env_zombie_positions:
             zombie_position_counts[pos] = zombie_position_counts.get(pos, 0) + 1
 
+        # Count cow position frequencies
+        cow_position_counts = {}
+        for pos in env_cow_positions:
+            cow_position_counts[pos] = cow_position_counts.get(pos, 0) + 1
+
         # Convert counts to probabilities
         env_player_distribution = {
             pos: count / n_samples for pos, count in player_position_counts.items()
         }
         env_zombie_distribution = {
             pos: count / n_samples for pos, count in zombie_position_counts.items()
+        }
+        env_cow_distribution = {
+            pos: count / n_samples for pos, count in cow_position_counts.items()
         }
 
         print(
@@ -1714,23 +1782,30 @@ class ZombieMovementAnalyzer:
             f"Environment zombie sampling found {len(env_zombie_distribution)} unique positions"
         )
         print(f"Environment zombie distribution: {env_zombie_distribution}")
+        print(
+            f"Environment cow sampling found {len(env_cow_distribution)} unique positions"
+        )
+        print(f"Environment cow distribution: {env_cow_distribution}")
 
         # Get law predictions
         print("Getting law predictions...")
-        player_predictions, zombie_predictions = self.get_law_predictions(
-            initial_state, action
+        player_predictions, zombie_predictions, cow_predictions = (
+            self.get_law_predictions(initial_state, action)
         )
 
         print(f"Player predictions found {len(player_predictions)} unique positions")
         print(f"Player distribution: {player_predictions}")
         print(f"Zombie predictions found {len(zombie_predictions)} unique positions")
         print(f"Zombie distribution: {zombie_predictions}")
+        print(f"Cow predictions found {len(cow_predictions)} unique positions")
+        print(f"Cow distribution: {cow_predictions}")
 
-        # Render environment sampling (both player and zombie)
-        env_rendered = render_with_dual_distribution_overlay(
+        # Render environment sampling (player, zombie, and cow)
+        env_rendered = render_with_triple_distribution_overlay(
             initial_state,
             env_player_distribution,
             env_zombie_distribution,
+            env_cow_distribution,
             view_dims=(9, 9),
             render_size=(256, 256),
             alpha=0.8,
@@ -1738,11 +1813,12 @@ class ZombieMovementAnalyzer:
             show_labels=show_labels,
         )
 
-        # Render law predictions (both player and zombie)
-        law_rendered = render_with_dual_distribution_overlay(
+        # Render law predictions (player, zombie, and cow)
+        law_rendered = render_with_triple_distribution_overlay(
             initial_state,
             player_predictions,
             zombie_predictions,
+            cow_predictions,
             view_dims=(9, 9),
             render_size=(256, 256),
             alpha=0.8,
@@ -1764,13 +1840,13 @@ class ZombieMovementAnalyzer:
         # Environment sampling
         axes[1].imshow(env_rendered)
         axes[1].set_title(
-            f"Environment Sampling - Player & Zombie ({n_samples} samples)"
+            f"Environment Sampling - Player, Zombie & Cow ({n_samples} samples)"
         )
         axes[1].axis("off")
 
         # Law predictions
         axes[2].imshow(law_rendered)
-        axes[2].set_title("Law Predictions - Player & Zombie (Orange)")
+        axes[2].set_title("Law Predictions - Player, Zombie & Cow")
         axes[2].axis("off")
 
         plt.tight_layout()
