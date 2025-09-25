@@ -1887,6 +1887,109 @@ class ZombieMovementAnalyzer:
             "Law vs environment comparison complete! Check 'law_vs_environment_comparison.png'"
         )
 
+    def create_law_vs_environment_comparison_no_cow(
+        self,
+        initial_state: WorldState,
+        action: str = "move_right",
+        n_samples: int = 50,
+        show_labels: bool = True,
+    ) -> None:
+        """
+        Create a side-by-side comparison of law predictions vs environment sampling
+        for the zombie only (no cow overlay).
+
+        Args:
+            initial_state: Starting state with zombie placed near player
+            action: Action to take
+            n_samples: Number of samples to take from environment
+            show_labels: Whether to show numerical labels on the heat map squares
+        """
+        print(
+            f"Creating zombie-only law vs environment comparison with {n_samples} samples..."
+        )
+
+        # Sample from the environment (ignore player and cow for this visualization)
+        print("Sampling from environment (zombie only)...")
+        _, env_zombie_positions, _ = self.sample_environment_transitions(
+            initial_state, action, n_samples
+        )
+
+        # Count zombie position frequencies
+        zombie_position_counts = {}
+        for pos in env_zombie_positions:
+            zombie_position_counts[pos] = zombie_position_counts.get(pos, 0) + 1
+
+        # Convert counts to probabilities
+        env_zombie_distribution = {
+            pos: count / n_samples for pos, count in zombie_position_counts.items()
+        }
+
+        print(
+            f"Environment zombie sampling found {len(env_zombie_distribution)} unique positions"
+        )
+        print(f"Environment zombie distribution: {env_zombie_distribution}")
+
+        # Get law predictions (use only zombie predictions)
+        print("Getting law predictions (zombie only)...")
+        _, zombie_predictions, _ = self.get_law_predictions(initial_state, action)
+        print(f"Zombie predictions found {len(zombie_predictions)} unique positions")
+        print(f"Zombie distribution: {zombie_predictions}")
+
+        # Render environment sampling (zombie only)
+        env_rendered = render_with_distribution_overlay(
+            initial_state,
+            env_zombie_distribution,
+            view_dims=(9, 9),
+            render_size=(256, 256),
+            alpha=0.8,
+            white_background_for_distributions=False,
+            show_labels=show_labels,
+        )
+
+        # Render law predictions (zombie only)
+        law_rendered = render_with_distribution_overlay(
+            initial_state,
+            zombie_predictions,
+            view_dims=(9, 9),
+            render_size=(256, 256),
+            alpha=0.8,
+            white_background_for_distributions=False,
+            show_labels=show_labels,
+        )
+
+        # Also render the base image for reference
+        base_image = observation(initial_state, render_size=(256, 256))
+
+        # Create comparison visualization
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+        # Base image
+        axes[0].imshow(base_image)
+        axes[0].set_title("Base Game State")
+        axes[0].axis("off")
+
+        # Environment sampling (zombie only)
+        axes[1].imshow(env_rendered)
+        axes[1].set_title(f"Environment Sampling - Zombie Only ({n_samples} samples)")
+        axes[1].axis("off")
+
+        # Law predictions (zombie only)
+        axes[2].imshow(law_rendered)
+        axes[2].set_title("Law Predictions - Zombie Only")
+        axes[2].axis("off")
+
+        plt.tight_layout()
+        plt.savefig(
+            "law_vs_environment_comparison_zombie_only.png",
+            dpi=150,
+            bbox_inches="tight",
+        )
+        plt.show()
+
+        print(
+            "Zombie-only law vs environment comparison complete! Check 'law_vs_environment_comparison_zombie_only.png'"
+        )
+
 
 def main():
     """Main function to run the zombie movement visualization."""
@@ -1919,6 +2022,12 @@ def main():
     # Create law vs environment comparison with labels
     print("\nCreating law vs environment comparison with labels...")
     analyzer.create_law_vs_environment_comparison(
+        state_with_zombie, "move_left", n_samples=30, show_labels=True
+    )
+
+    # Create zombie-only law vs environment comparison with labels
+    print("\nCreating zombie-only law vs environment comparison with labels...")
+    analyzer.create_law_vs_environment_comparison_no_cow(
         state_with_zombie, "move_left", n_samples=30, show_labels=True
     )
 
