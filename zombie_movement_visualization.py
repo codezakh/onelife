@@ -1219,8 +1219,8 @@ class ZombiePlacementHelper:
         cow = objects.Cow(world, cow_pos)
         world.add(cow)
 
-        # Skeleton is in the same row as the player, to the left but in view
-        skeleton_pos = (player.pos[1], player.pos[0] - 3)
+        # Add a skeleton further away for variety
+        skeleton_pos = (player.pos[0] - distance - 2, player.pos[1] - distance)
 
         # Ensure skeleton position is on walkable terrain
         if world[skeleton_pos] not in walkable_materials:
@@ -1229,20 +1229,9 @@ class ZombiePlacementHelper:
         skeleton = objects.Skeleton(world, skeleton_pos, player)
         world.add(skeleton)
 
-        # Add an arrow moving towards the player
-        arrow_pos = (
-            player.pos[0],
-            player.pos[1] - 1,
-        )  # 2 tiles to the left of the player
-        # Arrow should face towards the player (right)
-        arrow_facing = np.array([1, 0])  # Facing right towards player
-        arrow = objects.Arrow(world, arrow_pos, arrow_facing)
-        world.add(arrow)
-
         print(f"Placed zombie at {zombie_pos} near player at {player.pos}")
         print(f"Placed cow at {cow_pos}")
         print(f"Placed skeleton at {skeleton_pos}")
-        print(f"Placed arrow at {arrow_pos}")
         print("Added varied terrain with grass, path, sand, trees, and stone")
 
         # Export the modified state
