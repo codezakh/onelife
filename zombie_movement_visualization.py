@@ -1912,10 +1912,10 @@ def main():
         state_with_zombie, "move_left", n_samples=30
     )
 
-    # Create law vs environment comparison without labels
-    print("\nCreating law vs environment comparison without labels...")
+    # Create law vs environment comparison with labels
+    print("\nCreating law vs environment comparison with labels...")
     analyzer.create_law_vs_environment_comparison(
-        state_with_zombie, "move_left", n_samples=30, show_labels=False
+        state_with_zombie, "move_left", n_samples=30, show_labels=True
     )
 
 
