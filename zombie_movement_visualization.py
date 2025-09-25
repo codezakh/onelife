@@ -1224,8 +1224,8 @@ class ZombiePlacementHelper:
         for lp in lava_positions:
             _safe_set_material(lp, "lava")
 
-        # Add a zombie below and to the right of the player for interesting movement
-        zombie_pos = (player.pos[0] + distance, player.pos[1] + distance)
+        # Add a zombie below and to the right of the player; move it 1 tile closer
+        zombie_pos = (player.pos[0] + (distance - 1), player.pos[1] + (distance - 1))
 
         # Ensure zombie position is on walkable terrain
         if world[zombie_pos] not in walkable_materials:
@@ -1234,8 +1234,8 @@ class ZombiePlacementHelper:
         zombie = objects.Zombie(world, zombie_pos, player)
         world.add(zombie)
 
-        # Add a cow near the player (on the left side)
-        cow_pos = (player.pos[0] - distance, player.pos[1] + 1)
+        # Add a cow near the player and move it 1 tile right and several tiles down
+        cow_pos = (player.pos[0] - distance + 2, player.pos[1] + 3)
 
         # Ensure cow position is on walkable terrain
         if world[cow_pos] not in walkable_materials:
