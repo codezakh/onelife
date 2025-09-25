@@ -142,15 +142,15 @@ class CowMovementLaw:
             if entity.name != "cow":
                 continue
 
-            cow_x = entity.position.x
-            cow_y = entity.position.y
-
-            # Possible positions are up, down, left, right
-            possible_x = [cow_x - 1, cow_x + 1, cow_x]
-            possible_y = [cow_y - 1, cow_y + 1, cow_y]
-
-            entity.position.x = DiscreteDistribution(support=possible_x)  # type: ignore
-            entity.position.y = DiscreteDistribution(support=possible_y)  # type: ignore
+            entity.position.x = DiscreteDistribution(
+                support=[
+                    entity.position.x + 1,
+                    entity.position.x - 1,
+                    entity.position.x,
+                ],
+                logscores=[0.1, 0.1, 0.8],
+            )  # type: ignore
+            entity.position.y = DiscreteDistribution(support=[entity.position.y])  # type: ignore
 
 
 class PlayerMovementLaw:
