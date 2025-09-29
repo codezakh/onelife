@@ -23,6 +23,7 @@ dependencies = [
     # Can be upgraded. Set to 1.75 to avoid spam from a .75 minor version that that
     # repeatedly spams about missing fastapi dependency. This is a known bug, see:
     # https://github.com/BerriAI/litellm/issues/13827
+    "jupyter>=1.1.1",
     "litellm==1.75",
     "loguru>=0.7.3",
     "matplotlib>=3.10.6",

@@ -1,3 +1,5 @@
+import crafter.constants
+
 SLUG_ACTION_TO_BALROG_ACTION = {
     "noop": "Noop",
     "move_left": "Move West",
@@ -21,3 +23,12 @@ SLUG_ACTION_TO_BALROG_ACTION = {
 
 def remap_slug_actions_to_balrog_actions(action: str) -> str:
     return SLUG_ACTION_TO_BALROG_ACTION.get(action, action)
+
+
+SLUG_ACTION_TO_INT_INDEX = {
+    action: index for index, action in enumerate(crafter.constants.actions)
+}
+
+
+def remap_slug_actions_to_int_index(action: str) -> int:
+    return SLUG_ACTION_TO_INT_INDEX.get(action, -1)
