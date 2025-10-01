@@ -93,8 +93,17 @@ class DiscreteDistribution:
                 new_logscores[idx] = self.logscores[i]
         return DiscreteDistribution(support=new_support, logscores=new_logscores)
 
-    def sample(self) -> int:
+    def sample(self, logscores_deterministic_threshold: float = 0.01) -> int:
         """Samples a value from the distribution."""
+        # If the log-score of the most likely value is greater
+        # than the threshold, we return the most likely value instead
+        # of sampling from the distribution.
+        if (
+            self.logscores[np.argmax(self.logscores)]
+            > logscores_deterministic_threshold
+        ):
+            return int(self.support[np.argmax(self.logscores)])
+
         probabilities = np.exp(self.log_probs)
         # Explicitly cast to int to avoid numpy.int64
         return int(np.random.choice(self.support, p=probabilities))

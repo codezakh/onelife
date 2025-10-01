@@ -15,6 +15,12 @@ from loguru import logger
 from crafter.state_export import Inventory
 from crafter.constants import MaterialT, materials
 
+# Setting the threshold to 0.01 means that
+# we will _always_ sample even if
+# the experts have put a logprob as high as 0.0 (100% probability)
+# on a single value.
+LOGP_DETERMINISTIC_THRESHOLD_NEVER = 0.01
+
 
 @dataclass(frozen=True)
 class ObservableExtractorConfig:
@@ -28,6 +34,10 @@ class ObservableExtractorConfig:
         default_factory=lambda: np.array([0, 1])
     )
     inventory_domain: np.ndarray = field(default_factory=lambda: np.arange(0, 101))
+    logp_deterministic_threshold: float = field(
+        default=LOGP_DETERMINISTIC_THRESHOLD_NEVER
+    )
+    noise_logscore: float = field(default=-10.0)
 
 
 ExpertIndex: TypeAlias = int
@@ -104,6 +114,9 @@ class ObservableExtractor:
         # Define domain for inventory (reasonable range for Crafter)
         self.inventory_domain = config.inventory_domain
 
+        self.logp_deterministic_threshold = config.logp_deterministic_threshold
+        self.noise_logscore = config.noise_logscore
+
     def extract_attribute_predictions(
         self, state: WorldState
     ) -> dict[ObservableId, DiscreteDistribution]:
@@ -117,20 +130,26 @@ class ObservableExtractor:
             state.player.position.x, DiscreteDistribution
         ):
             predictions[ObservableId("player_position_x")] = (
-                state.player.position.x.expand_support(self.position_domain)
+                state.player.position.x.expand_support(
+                    self.position_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if hasattr(state.player.position, "y") and isinstance(
             state.player.position.y, DiscreteDistribution
         ):
             predictions[ObservableId("player_position_y")] = (
-                state.player.position.y.expand_support(self.position_domain)
+                state.player.position.y.expand_support(
+                    self.position_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         # Extract player health
         if isinstance(state.player.health, DiscreteDistribution):
             predictions[ObservableId("player_health")] = (
-                state.player.health.expand_support(self.health_domain)
+                state.player.health.expand_support(
+                    self.health_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         # Extract entity lifecycle observables
@@ -139,8 +158,10 @@ class ObservableExtractor:
             if entity.entity_id == state.player.entity_id:
                 continue  # Skip player, is always present
             entity_id = entity.entity_id
-            predictions[ObservableId(f"entity_exists_{entity_id}")] = (
-                DiscreteDistribution([1]).expand_support(self.entity_existence_domain)
+            predictions[
+                ObservableId(f"entity_exists_{entity_id}")
+            ] = DiscreteDistribution([1]).expand_support(
+                self.entity_existence_domain, noise_logscore=self.noise_logscore
             )
 
         # Track entity counts (per entity type) - total count of each entity type
@@ -150,97 +171,123 @@ class ObservableExtractor:
                 continue  # Skip player, is always present
             entity_counts[entity.name] += 1
         for entity_type in self.entity_types:
-            predictions[ObservableId(f"entity_count_{entity_type}")] = (
-                DiscreteDistribution([entity_counts[entity_type]]).expand_support(
-                    self.entity_count_domain
-                )
+            predictions[
+                ObservableId(f"entity_count_{entity_type}")
+            ] = DiscreteDistribution([entity_counts[entity_type]]).expand_support(
+                self.entity_count_domain, noise_logscore=self.noise_logscore
             )
 
         # Extract inventory observables
         if isinstance(state.player.inventory.health, DiscreteDistribution):
             predictions[ObservableId("player_inventory_health")] = (
-                state.player.inventory.health.expand_support(self.inventory_domain)
+                state.player.inventory.health.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.food, DiscreteDistribution):
             predictions[ObservableId("player_inventory_food")] = (
-                state.player.inventory.food.expand_support(self.inventory_domain)
+                state.player.inventory.food.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.drink, DiscreteDistribution):
             predictions[ObservableId("player_inventory_drink")] = (
-                state.player.inventory.drink.expand_support(self.inventory_domain)
+                state.player.inventory.drink.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.energy, DiscreteDistribution):
             predictions[ObservableId("player_inventory_energy")] = (
-                state.player.inventory.energy.expand_support(self.inventory_domain)
+                state.player.inventory.energy.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.sapling, DiscreteDistribution):
             predictions[ObservableId("player_inventory_sapling")] = (
-                state.player.inventory.sapling.expand_support(self.inventory_domain)
+                state.player.inventory.sapling.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.wood, DiscreteDistribution):
             predictions[ObservableId("player_inventory_wood")] = (
-                state.player.inventory.wood.expand_support(self.inventory_domain)
+                state.player.inventory.wood.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.stone, DiscreteDistribution):
             predictions[ObservableId("player_inventory_stone")] = (
-                state.player.inventory.stone.expand_support(self.inventory_domain)
+                state.player.inventory.stone.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.coal, DiscreteDistribution):
             predictions[ObservableId("player_inventory_coal")] = (
-                state.player.inventory.coal.expand_support(self.inventory_domain)
+                state.player.inventory.coal.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.iron, DiscreteDistribution):
             predictions[ObservableId("player_inventory_iron")] = (
-                state.player.inventory.iron.expand_support(self.inventory_domain)
+                state.player.inventory.iron.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.diamond, DiscreteDistribution):
             predictions[ObservableId("player_inventory_diamond")] = (
-                state.player.inventory.diamond.expand_support(self.inventory_domain)
+                state.player.inventory.diamond.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.wood_pickaxe, DiscreteDistribution):
             predictions[ObservableId("player_inventory_wood_pickaxe")] = (
                 state.player.inventory.wood_pickaxe.expand_support(
-                    self.inventory_domain
+                    self.inventory_domain, noise_logscore=self.noise_logscore
                 )
             )
 
         if isinstance(state.player.inventory.stone_pickaxe, DiscreteDistribution):
             predictions[ObservableId("player_inventory_stone_pickaxe")] = (
                 state.player.inventory.stone_pickaxe.expand_support(
-                    self.inventory_domain
+                    self.inventory_domain, noise_logscore=self.noise_logscore
                 )
             )
 
         if isinstance(state.player.inventory.iron_pickaxe, DiscreteDistribution):
             predictions[ObservableId("player_inventory_iron_pickaxe")] = (
                 state.player.inventory.iron_pickaxe.expand_support(
-                    self.inventory_domain
+                    self.inventory_domain, noise_logscore=self.noise_logscore
                 )
             )
 
         if isinstance(state.player.inventory.wood_sword, DiscreteDistribution):
             predictions[ObservableId("player_inventory_wood_sword")] = (
-                state.player.inventory.wood_sword.expand_support(self.inventory_domain)
+                state.player.inventory.wood_sword.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.stone_sword, DiscreteDistribution):
             predictions[ObservableId("player_inventory_stone_sword")] = (
-                state.player.inventory.stone_sword.expand_support(self.inventory_domain)
+                state.player.inventory.stone_sword.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         if isinstance(state.player.inventory.iron_sword, DiscreteDistribution):
             predictions[ObservableId("player_inventory_iron_sword")] = (
-                state.player.inventory.iron_sword.expand_support(self.inventory_domain)
+                state.player.inventory.iron_sword.expand_support(
+                    self.inventory_domain, noise_logscore=self.noise_logscore
+                )
             )
 
         # Extract entity positions and health
@@ -254,7 +301,7 @@ class ObservableExtractor:
                 entity.position.x, DiscreteDistribution
             ):
                 predictions[ObservableId(attr_name)] = entity.position.x.expand_support(
-                    self.position_domain
+                    self.position_domain, noise_logscore=self.noise_logscore
                 )
 
             # Entity position y
@@ -263,14 +310,14 @@ class ObservableExtractor:
                 entity.position.y, DiscreteDistribution
             ):
                 predictions[ObservableId(attr_name)] = entity.position.y.expand_support(
-                    self.position_domain
+                    self.position_domain, noise_logscore=self.noise_logscore
                 )
 
             # Entity health
             attr_name = f"entity_{entity.entity_id}_health"
             if isinstance(entity.health, DiscreteDistribution):
                 predictions[ObservableId(attr_name)] = entity.health.expand_support(
-                    self.health_domain
+                    self.health_domain, noise_logscore=self.noise_logscore
                 )
 
         return predictions
@@ -363,8 +410,8 @@ class ObservableExtractor:
 
         return observed
 
-    @staticmethod
     def apply_expert_predictions(
+        self,
         new_state: WorldState,
         expert_predictions: Mapping[
             ObservableId, Mapping[ExpertIndex, DiscreteDistribution]
@@ -387,7 +434,9 @@ class ObservableExtractor:
                 combined_dist = combine_active_expert_predictions_for_attr(
                     player_x_preds, weights
                 )
-                new_state.player.position.x = combined_dist.sample()
+                new_state.player.position.x = combined_dist.sample(
+                    self.logp_deterministic_threshold
+                )
 
         if "player_position_y" in expert_predictions:
             with logger.contextualize(attr_name="player_position_y"):
@@ -395,7 +444,9 @@ class ObservableExtractor:
                 combined_dist = combine_active_expert_predictions_for_attr(
                     player_y_preds, weights
                 )
-                new_state.player.position.y = combined_dist.sample()
+                new_state.player.position.y = combined_dist.sample(
+                    self.logp_deterministic_threshold
+                )
 
         # Sample player health
         if "player_health" in expert_predictions:
