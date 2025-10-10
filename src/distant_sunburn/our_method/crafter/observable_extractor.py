@@ -39,6 +39,7 @@ class ObservableExtractorConfig:
         default=LOGP_DETERMINISTIC_THRESHOLD_NEVER
     )
     noise_logscore: float = field(default=-10.0)
+    top_k: Optional[int] = field(default=None)
 
 
 ExpertIndex: TypeAlias = int
@@ -117,6 +118,7 @@ class ObservableExtractor:
 
         self.logp_deterministic_threshold = config.logp_deterministic_threshold
         self.noise_logscore = config.noise_logscore
+        self.top_k = config.top_k
 
     def extract_attribute_predictions(
         self, state: WorldState
@@ -436,7 +438,7 @@ class ObservableExtractor:
                     player_x_preds, weights
                 )
                 new_state.player.position.x = combined_dist.sample(
-                    self.logp_deterministic_threshold
+                    self.logp_deterministic_threshold, self.top_k
                 )
 
         if "player_position_y" in expert_predictions:
@@ -446,7 +448,7 @@ class ObservableExtractor:
                     player_y_preds, weights
                 )
                 new_state.player.position.y = combined_dist.sample(
-                    self.logp_deterministic_threshold
+                    self.logp_deterministic_threshold, self.top_k
                 )
 
         # Sample player health
@@ -456,7 +458,9 @@ class ObservableExtractor:
                 combined_dist = combine_active_expert_predictions_for_attr(
                     player_health_preds, weights
                 )
-                new_state.player.health = combined_dist.sample()
+                new_state.player.health = combined_dist.sample(
+                    self.logp_deterministic_threshold, self.top_k
+                )
 
         # Sample entity positions and health
         for entity in new_state.objects:
@@ -475,7 +479,9 @@ class ObservableExtractor:
                         combined_dist = combine_active_expert_predictions_for_attr(
                             entity_x_preds, weights
                         )
-                        entity.position.x = combined_dist.sample()
+                        entity.position.x = combined_dist.sample(
+                            self.logp_deterministic_threshold, self.top_k
+                        )
 
                 # Entity position y
                 attr_name = f"entity_{entity.entity_id}_position_y"
@@ -485,7 +491,9 @@ class ObservableExtractor:
                         combined_dist = combine_active_expert_predictions_for_attr(
                             entity_y_preds, weights
                         )
-                        entity.position.y = combined_dist.sample()
+                        entity.position.y = combined_dist.sample(
+                            self.logp_deterministic_threshold, self.top_k
+                        )
 
                 # Entity health
                 attr_name = f"entity_{entity.entity_id}_health"
@@ -497,7 +505,9 @@ class ObservableExtractor:
                         combined_dist = combine_active_expert_predictions_for_attr(
                             entity_health_preds, weights
                         )
-                        entity.health = combined_dist.sample()
+                        entity.health = combined_dist.sample(
+                            self.logp_deterministic_threshold, self.top_k
+                        )
 
         inventory_attr_setter = InventoryAttrSetter(new_state.player.inventory)
 
@@ -526,7 +536,11 @@ class ObservableExtractor:
                     combined_dist = combine_active_expert_predictions_for_attr(
                         attr_preds, weights
                     )
-                    attr_setter(combined_dist.sample())
+                    attr_setter(
+                        combined_dist.sample(
+                            self.logp_deterministic_threshold, self.top_k
+                        )
+                    )
 
         return new_state
 
