@@ -15,6 +15,7 @@ from loguru import logger
 from crafter.state_export import Inventory
 from crafter.constants import MaterialT, materials
 from icecream import ic
+from crafter.state_export import ZombieState
 
 # Setting the threshold to 0.01 means that
 # we will _always_ sample even if
@@ -39,6 +40,9 @@ class ObservableExtractorConfig:
         default=LOGP_DETERMINISTIC_THRESHOLD_NEVER
     )
     noise_logscore: float = field(default=-10.0)
+    zombie_cooldown_domain: np.ndarray = field(
+        default_factory=lambda: np.arange(0, 101)
+    )
     top_k: Optional[int] = field(default=None)
 
 
@@ -119,6 +123,7 @@ class ObservableExtractor:
         self.logp_deterministic_threshold = config.logp_deterministic_threshold
         self.noise_logscore = config.noise_logscore
         self.top_k = config.top_k
+        self.zombie_cooldown_domain = config.zombie_cooldown_domain
 
     def extract_attribute_predictions(
         self, state: WorldState
@@ -323,6 +328,17 @@ class ObservableExtractor:
                     self.health_domain, noise_logscore=self.noise_logscore
                 )
 
+            match entity:
+                case ZombieState():
+                    attr_name = f"entity_{entity.entity_id}_cooldown"
+                    if isinstance(entity.cooldown, DiscreteDistribution):
+                        predictions[ObservableId(attr_name)] = (
+                            entity.cooldown.expand_support(
+                                self.zombie_cooldown_domain,
+                                noise_logscore=self.noise_logscore,
+                            )
+                        )
+
         return predictions
 
     def get_observed_outcomes(self, state: WorldState) -> dict[ObservableId, int]:
@@ -372,6 +388,14 @@ class ObservableExtractor:
                 entity.position.y
             )
             observed[ObservableId(f"entity_{entity.entity_id}_health")] = entity.health
+
+            match entity:
+                case ZombieState():
+                    observed[ObservableId(f"entity_{entity.entity_id}_cooldown")] = (
+                        entity.cooldown
+                    )
+                case _:
+                    pass
 
         # Extract inventory observables
         observed[ObservableId("player_inventory_health")] = (
@@ -508,6 +532,24 @@ class ObservableExtractor:
                         entity.health = combined_dist.sample(
                             self.logp_deterministic_threshold, self.top_k
                         )
+                match entity:
+                    case ZombieState():
+                        attr_name = f"entity_{entity.entity_id}_cooldown"
+                        if attr_name in expert_predictions:
+                            with logger.contextualize(attr_name=attr_name):
+                                entity_cooldown_preds = expert_predictions[
+                                    ObservableId(attr_name)
+                                ]
+                                combined_dist = (
+                                    combine_active_expert_predictions_for_attr(
+                                        entity_cooldown_preds, weights
+                                    )
+                                )
+                                entity.cooldown = combined_dist.sample(
+                                    self.logp_deterministic_threshold, self.top_k
+                                )
+                    case _:
+                        pass
 
         inventory_attr_setter = InventoryAttrSetter(new_state.player.inventory)
 
