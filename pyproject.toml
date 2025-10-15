@@ -10,7 +10,6 @@ description = ""
 readme = "README.md"
 authors = []
 dependencies = [
-    "12-distant-sunburn-gameenv",
     "anthropic[balrog]>=0.64.0",
     "backoff>=2.2.1",
     "crafter",
@@ -60,7 +59,6 @@ filterwarnings = [
 ]
 
 [tool.uv.sources]
-12-distant-sunburn-gameenv = { path = "external/12-distant-sunburn-gameenv", editable = true }
 crafter = { path = "external/crafter_refactored", editable = true }
 
 [dependency-groups]
