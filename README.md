@@ -49,8 +49,8 @@ The integration tests provide the clearest view of how the main components work 
 
 Two main integration tests demonstrate the full system on the Crafter environment:
 
-**PoE-World** (`tests/integration/crafter/test_poe_world_fitting_and_eval.py`):
-**OneLife** (`tests/integration/crafter/test_our_method_fitting_and_eval.py`):
+- **PoE-World** (`tests/integration/crafter/test_poe_world_fitting_and_eval.py`):
+- **OneLife** (`tests/integration/crafter/test_our_method_fitting_and_eval.py`):
 
 Both tests follow this pattern:
 
