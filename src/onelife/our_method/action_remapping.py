@@ -1,3 +1,6 @@
+from crafter_oo.constants import ActionT
+
+
 import crafter_oo
 
 SLUG_ACTION_TO_BALROG_ACTION = {
@@ -26,7 +29,7 @@ def remap_slug_actions_to_balrog_actions(action: str) -> str:
 
 
 SLUG_ACTION_TO_INT_INDEX = {
-    action: index for index, action in enumerate(crafter.constants.actions)
+    action: index for index, action in enumerate[ActionT](crafter_oo.constants.actions)
 }
 
 
