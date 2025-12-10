@@ -156,6 +156,7 @@ class EvaluationMetrics:
     discriminative_accuracy: float
     normalized_recall: float
     reciprocal_rank: float
+    raw_rank: float
     n_distractors: float
 
 
@@ -233,6 +234,7 @@ class EvaluationResults:
     metrics_by_source: Mapping[
         TransitionSource, Mapping[Literal["mean", "std"], EvaluationMetrics]
     ]
+    raw_metrics_by_source: Mapping[TransitionSource, list[EvaluationMetrics]]
 
 
 class Evaluator(Generic[SymbolicStateT, ActionT]):
@@ -354,6 +356,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                 normalized_recall = 1.0
             # Reciprocal rank (higher is better). Use best rank among equivalents.
             reciprocal_rank = 1.0 / float(best_rank)
+            raw_rank = float(best_rank)
         else:
             # This should be impossible because the true next state is explicitly
             # included in the candidates list. If it happens, it indicates a serious
@@ -370,6 +373,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             discriminative_accuracy=discriminative_accuracy,
             normalized_recall=normalized_recall,
             reciprocal_rank=reciprocal_rank,
+            raw_rank=raw_rank,
             n_distractors=n_distractors,
         )
 
@@ -379,7 +383,9 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         transitions_for_source: Sequence[SymbolicTransition[SymbolicStateT, ActionT]],
         all_transitions: Sequence[SymbolicTransition[SymbolicStateT, ActionT]],
         num_trials: int,
-    ) -> dict[Literal["mean", "std"], EvaluationMetrics]:
+    ) -> tuple[
+        dict[Literal["mean", "std"], EvaluationMetrics], list[EvaluationMetrics]
+    ]:
         """Evaluate a single scenario (transition source) over multiple trials.
 
         This method measures a model's performance on one mechanic by:
@@ -396,11 +402,17 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
 
         The per-trial means ensure each scenario is summarized by a single
         number per trial, so scenarios with many transitions do not dominate.
+
+        Returns:
+            A tuple of (aggregated_metrics_dict, raw_metrics_list) where:
+            - aggregated_metrics_dict contains "mean" and "std" keys
+            - raw_metrics_list contains all individual transition metrics from all trials
         """
         logger.info(
             f"Evaluating {len(transitions_for_source)} transitions for scenario for {num_trials} trials"
         )
         metrics_accumulator: list[list[EvaluationMetrics]] = []
+        raw_metrics_all_trials: list[EvaluationMetrics] = []
         for _ in range(num_trials):
             metrics_for_trial: list[EvaluationMetrics] = []
             for transition in transitions_for_source:
@@ -408,6 +420,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     world_model, transition, all_transitions
                 )
                 metrics_for_trial.append(evaluation_metrics)
+                raw_metrics_all_trials.append(evaluation_metrics)
             metrics_accumulator.append(metrics_for_trial)
 
         # Calculate the _mean_ performance in each trial
@@ -423,12 +436,15 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             aggregated_means_per_trial, reduction="std"
         )
 
-        return {
-            "mean": self._aggregate_metrics(
-                aggregated_means_per_trial, reduction="mean"
-            ),
-            "std": std_across_trials,
-        }
+        return (
+            {
+                "mean": self._aggregate_metrics(
+                    aggregated_means_per_trial, reduction="mean"
+                ),
+                "std": std_across_trials,
+            },
+            raw_metrics_all_trials,
+        )
 
     def _aggregate_metrics(
         self,
@@ -439,6 +455,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         discriminative_accuracies: list[float] = []
         normalized_recalls: list[float] = []
         reciprocal_ranks: list[float] = []
+        raw_ranks: list[float] = []
         n_distractors: list[float] = []
 
         for metrics in iterable:
@@ -446,6 +463,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             discriminative_accuracies.append(metrics.discriminative_accuracy)
             normalized_recalls.append(metrics.normalized_recall)
             reciprocal_ranks.append(metrics.reciprocal_rank)
+            raw_ranks.append(metrics.raw_rank)
             n_distractors.append(metrics.n_distractors)
 
         match reduction:
@@ -455,6 +473,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     float(np.mean(discriminative_accuracies)),
                     float(np.mean(normalized_recalls)),
                     float(np.mean(reciprocal_ranks)),
+                    float(np.mean(raw_ranks)),
                     float(np.mean(n_distractors)),
                 )
             case "std":
@@ -463,6 +482,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     float(np.std(discriminative_accuracies)),
                     float(np.std(normalized_recalls)),
                     float(np.std(reciprocal_ranks)),
+                    float(np.std(raw_ranks)),
                     float(np.std(n_distractors)),
                 )
             case "min":
@@ -471,6 +491,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     float(np.min(discriminative_accuracies)),
                     float(np.min(normalized_recalls)),
                     float(np.min(reciprocal_ranks)),
+                    float(np.min(raw_ranks)),
                     int(np.min(n_distractors)),
                 )
             case "max":
@@ -479,6 +500,7 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
                     float(np.max(discriminative_accuracies)),
                     float(np.max(normalized_recalls)),
                     float(np.max(reciprocal_ranks)),
+                    float(np.max(raw_ranks)),
                     int(np.max(n_distractors)),
                 )
             case _:
@@ -511,15 +533,18 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
         metrics_by_source: dict[
             TransitionSource, dict[Literal["mean", "std"], EvaluationMetrics]
         ] = {}
+        raw_metrics_by_source: dict[TransitionSource, list[EvaluationMetrics]] = {}
 
         for transition_source, transitions in self.ctx.test_transitions.items():
             with logger.contextualize(transition_source=transition_source):
-                metrics_by_source[transition_source] = self._evaluate_transition_source(
+                aggregated_metrics, raw_metrics = self._evaluate_transition_source(
                     world_model,
                     transitions,
                     all_transitions,
                     self.ctx.config.num_trials,
                 )
+                metrics_by_source[transition_source] = aggregated_metrics
+                raw_metrics_by_source[transition_source] = raw_metrics
 
         mean_metrics = self._aggregate_metrics(
             iterable=[_["mean"] for _ in metrics_by_source.values()],
@@ -545,4 +570,5 @@ class Evaluator(Generic[SymbolicStateT, ActionT]):
             reciprocal_rank_std=std_metrics.reciprocal_rank,
             total_transitions_evaluated=len(all_transitions),
             metrics_by_source=metrics_by_source,
+            raw_metrics_by_source=raw_metrics_by_source,
         )
