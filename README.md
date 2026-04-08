@@ -10,8 +10,8 @@ Symbolic world modeling is the task of inferring and representing the transition
 Clone the repository and initialize submodules:
 
 ```bash
-git clone --depth 1 <repository-url>
-cd 12-distant-sunburn
+git clone --depth 1 git@github.com:codezakh/onelife.git 
+cd onelife 
 git submodule update --init
 ```
 
