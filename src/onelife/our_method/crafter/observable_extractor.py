@@ -136,6 +136,16 @@ class ObservableExtractor:
         self.detect_facing_tile = config.detect_facing_tile
         self.material_domain = config.material_domain
 
+    def __setstate__(self, state: dict) -> None:
+        # Backfill fields added after a pickle was written. Older pickles (e.g.
+        # the released fitted world model) predate fields like detect_facing_tile,
+        # so their saved state lacks those keys; unpickling skips __init__, which
+        # is the only place those defaults are otherwise set. Layer the saved
+        # state over a fresh instance's defaults so anything the pickle actually
+        # stored wins, and any newer field falls back to its current default.
+        defaults = ObservableExtractor().__dict__
+        self.__dict__.update({**defaults, **state})
+
     def extract_attribute_predictions(
         self, state: WorldState
     ) -> dict[ObservableId, DiscreteDistribution]:
