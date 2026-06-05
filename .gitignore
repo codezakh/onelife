@@ -176,3 +176,6 @@ cython_debug/
 .DS_Store
 
 .vscode
+
+# Runbook output (transient artifacts produced by the runbook scripts)
+runbook_output/

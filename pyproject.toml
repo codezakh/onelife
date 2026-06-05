@@ -71,5 +71,5 @@ balrog = [
 ]
 
 [tool.ty.src]
-include = ["src", "tests"]
+include = ["src", "tests", "runbook"]
 exclude = ["src/onelife/external"]
