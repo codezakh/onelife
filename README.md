@@ -51,7 +51,7 @@ uv run --env-file .env pytest tests/integration/crafter/test_poe_world_fitting_a
 ```
 
 ### Crafter Environment Integration Tests
-The integration tests provide the clearest view of how the main components work together. These tests demonstrate the complete pipeline: generating training data, fitting a world model, and evaluating its performance.
+The integration tests also provide a view of how the main components work together. These tests demonstrate the complete pipeline: generating training data, fitting a world model, and evaluating its performance.
 
 Two main integration tests demonstrate the full system on the Crafter environment:
 
