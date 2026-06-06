@@ -1,20 +1,16 @@
 import argparse
 import ast
-import sys
+import json
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List
 
-import cloudpickle
 import numpy as np
 from crafter_oo.functional_env import EnvConfig, transition
 from crafter_oo.state_export import WorldState
 
-import onelife
-import crafter_oo
 from onelife.balrog_evaluator import TrajectoryStep
 from onelife.evaluator import (
     EvaluationConfig,
-    EvaluationResults,
     Evaluator,
     NullWorldModel,
     TrueTransitionWorldModel,
@@ -23,6 +19,10 @@ from onelife.evaluator.baselines import RandomWorldModel
 from onelife.evaluator.crafter.components import _gamestate_to_json
 from onelife.evaluator.crafter.factory import CrafterEvaluationFactory
 from onelife.evaluator.crafter.utils import MAP_ACTION_TO_INDEX
+from onelife.evaluator.serde import (
+    evaluation_results_from_jsonable,
+    evaluation_results_to_jsonable,
+)
 from onelife.io_utils import PydanticJSONLinesReader
 from onelife.local_code_execution import ExecWithLimitedNamespace
 from onelife.our_method.core import (
@@ -31,6 +31,7 @@ from onelife.our_method.core import (
     SymbolicTransition,
 )
 from onelife.our_method.crafter.observable_extractor import ObservableExtractor
+from onelife.our_method.crafter.serde import load_law_mixture, save_law_mixture
 from onelife.our_method.optimization import MaxLikelihoodWeightFitter
 from onelife.our_method.world_modeling import LawMixture
 from onelife.poe_world.core import DiscreteDistribution
@@ -46,12 +47,6 @@ from onelife.our_method.action_remapping import (
     remap_slug_actions_to_balrog_actions,
 )
 from onelife.pipeline_utils import PydanticJsonLinesFileTarget
-
-# Map the old package names onto the current ones so cloudpickle can load
-# world-model pickles written before the distant_sunburn -> onelife and
-# crafter -> crafter_oo renames.
-sys.modules["distant_sunburn"] = onelife
-sys.modules["crafter"] = crafter_oo
 
 
 def convert_trajectory_steps_to_transitions(
@@ -255,14 +250,13 @@ def main(
     logger.info(f"Loaded {len(trajectory_steps)} trajectory steps")
 
     # Check if fitted world model already exists
-    world_model_path = output_dir / "fitted_world_model.pkl"
+    world_model_path = output_dir / "fitted_world_model.json"
 
     if world_model_path.exists():
         logger.info(f"Loading existing fitted world model from: {world_model_path}")
-        with open(world_model_path, "rb") as f:
-            learned_world_model = cast(LawMixture[WorldState, Any], cloudpickle.load(f))
-            weighted_laws = learned_world_model.laws
-        logger.info("Successfully loaded fitted world model from pickle")
+        learned_world_model = load_law_mixture(world_model_path)
+        weighted_laws = learned_world_model.laws
+        logger.info("Successfully loaded fitted world model from JSON")
     else:
         logger.info("No existing fitted world model found, fitting new model...")
 
@@ -295,9 +289,8 @@ def main(
             weighted_laws=weighted_laws,
         )
 
-        # Save the fitted world model using Cloud Pickle
-        with open(world_model_path, "wb") as f:
-            cloudpickle.dump(learned_world_model, f)
+        # Save the fitted world model as JSON
+        save_law_mixture(learned_world_model, world_model_path)
         logger.info(f"Saved fitted world model to: {world_model_path}")
 
     # Create comparison models
@@ -322,30 +315,29 @@ def main(
         env_config=env_config, policy_seed=eval_seed
     )
     # Check if evaluation results already exist
-    evaluation_results_path = output_dir / "evaluation_results.pkl"
+    evaluation_results_path = output_dir / "evaluation_results.json"
 
     if evaluation_results_path.exists():
         logger.info(
             f"Loading existing evaluation results from: {evaluation_results_path}"
         )
-        with open(evaluation_results_path, "rb") as f:
-            evaluation_results = cast(Dict[str, Any], cloudpickle.load(f))
+        stored_results = json.loads(evaluation_results_path.read_text())
 
         # Extract individual performance results
-        learned_wm_perf = cast(
-            EvaluationResults, evaluation_results["learned_world_model_performance"]
+        learned_wm_perf = evaluation_results_from_jsonable(
+            stored_results["learned_world_model_performance"]
         )
-        true_wm_perf = cast(
-            EvaluationResults, evaluation_results["true_world_model_performance"]
+        true_wm_perf = evaluation_results_from_jsonable(
+            stored_results["true_world_model_performance"]
         )
-        null_wm_perf = cast(
-            EvaluationResults, evaluation_results["null_world_model_performance"]
+        null_wm_perf = evaluation_results_from_jsonable(
+            stored_results["null_world_model_performance"]
         )
-        random_wm_perf = cast(
-            EvaluationResults, evaluation_results["random_world_model_performance"]
+        random_wm_perf = evaluation_results_from_jsonable(
+            stored_results["random_world_model_performance"]
         )
 
-        logger.info("Successfully loaded evaluation results from pickle")
+        logger.info("Successfully loaded evaluation results from JSON")
     else:
         logger.info("No existing evaluation results found, running evaluations...")
 
@@ -368,12 +360,16 @@ def main(
         with logger.contextualize(world_model="random"):
             random_wm_perf = evaluator.evaluate(random_world_model)
 
-        # Save evaluation results using Cloud Pickle
+        # Save evaluation results as JSON
         evaluation_results = {
-            "learned_world_model_performance": learned_wm_perf,
-            "true_world_model_performance": true_wm_perf,
-            "null_world_model_performance": null_wm_perf,
-            "random_world_model_performance": random_wm_perf,
+            "learned_world_model_performance": evaluation_results_to_jsonable(
+                learned_wm_perf
+            ),
+            "true_world_model_performance": evaluation_results_to_jsonable(true_wm_perf),
+            "null_world_model_performance": evaluation_results_to_jsonable(null_wm_perf),
+            "random_world_model_performance": evaluation_results_to_jsonable(
+                random_wm_perf
+            ),
             "evaluation_config": {
                 "num_distractors": 10,
                 "num_trials": 5,
@@ -382,8 +378,7 @@ def main(
             },
         }
 
-        with open(evaluation_results_path, "wb") as f:
-            cloudpickle.dump(evaluation_results, f)
+        evaluation_results_path.write_text(json.dumps(evaluation_results, indent=2))
         logger.info(f"Saved evaluation results to: {evaluation_results_path}")
 
     # Print results
