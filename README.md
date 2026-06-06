@@ -21,6 +21,12 @@ Install dependencies using [uv](https://docs.astral.sh/uv/getting-started/instal
 uv sync
 ```
 
+### Running the pipeline
+
+The `runbook/` directory runs the full OneLife pipeline: exploration, law synthesis, and optimization with evaluation. See [runbook/README.md](runbook/README.md) for how to run each step.
+
+The exploration trajectory, synthesized laws, fitted world model, and evaluation results from the paper are on HuggingFace at [🤗 OneLife-Crafter](https://huggingface.co/datasets/codezakh/OneLife-Crafter).
+
 ### Running Tests
 
 Run the test suite from the `onelife` directory:
